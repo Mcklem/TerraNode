@@ -73,6 +73,20 @@ rules:
         await system.stop()
         self.assertFalse(system._running)
 
+    async def test_system_with_api_enabled(self):
+        from core.settings import settings
+        settings.enable_api = True
+        settings.api_port = 8899  # avoid port conflict
+        try:
+            system = ControllerSystem(self.config_path)
+            await system.start()
+            self.assertTrue(system._running)
+            self.assertIsNotNone(system.api_task)
+            self.assertIsNotNone(system.live_command_service)
+            await system.stop()
+        finally:
+            settings.enable_api = False
+
 
 if __name__ == "__main__":
     unittest.main()

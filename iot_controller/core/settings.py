@@ -22,6 +22,11 @@ class Settings:
     node_max_retries: int = int(os.getenv("NODE_MAX_RETRIES", "3"))
     node_timeout: float = float(os.getenv("NODE_TIMEOUT", "12.0"))
 
+    # FastAPI Web Service settings
+    enable_api: bool = os.getenv("ENABLE_API", "false").lower() in ("true", "1", "yes")
+    api_host: str = os.getenv("API_HOST", "0.0.0.0")
+    api_port: int = int(os.getenv("API_PORT", "8000"))
+
     def get_log_level_int(self) -> int:
         """Convert log level string to standard logging integer level."""
         return getattr(logging, self.log_level, logging.INFO)

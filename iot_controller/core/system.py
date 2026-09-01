@@ -43,6 +43,8 @@ class ControllerSystem:
         self.live_command_service: Optional[Any] = None
         self.rule_engine: Optional[RuleEngine] = None
         self.health_monitor: Optional[HealthMonitor] = None
+        self.api_server: Optional[Any] = None
+        self.api_task: Optional[asyncio.Task] = None
         self._running: bool = False
 
     async def start(self) -> None:
@@ -118,6 +120,32 @@ class ControllerSystem:
         self.health_monitor = HealthMonitor(self.node_manager, self.device_manager, self.event_bus)
         await self.health_monitor.start()
 
+        # Populate API System Container
+        from api.dependencies import system_container
+        system_container.device_manager = self.device_manager
+        system_container.node_manager = self.node_manager
+        system_container.health_monitor = self.health_monitor
+        system_container.live_command_service = self.live_command_service
+        system_container.override_registry = self.override_registry
+
+        # 13b. Start FastAPI Web Service if enabled in settings
+        if settings.enable_api:
+            import uvicorn
+            from api.app import create_app
+
+            api_app = create_app()
+            config = uvicorn.Config(
+                app=api_app,
+                host=settings.api_host,
+                port=settings.api_port,
+                log_level="info",
+            )
+            self.api_server = uvicorn.Server(config)
+            self.api_task = asyncio.create_task(self.api_server.serve())
+            self.logger.info(
+                f"FastAPI Web Service started on http://{settings.api_host}:{settings.api_port}"
+            )
+
         # 14. System READY
         self._running = True
         self.logger.info("=" * 60)
@@ -132,6 +160,14 @@ class ControllerSystem:
             return
 
         self.logger.info("Shutting down Distributed IoT Hardware Controller...")
+
+        if self.api_server:
+            self.api_server.should_exit = True
+            if self.api_task and not self.api_task.done():
+                try:
+                    await asyncio.wait_for(self.api_task, timeout=3.0)
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    pass
 
         if self.health_monitor:
             await self.health_monitor.stop()
