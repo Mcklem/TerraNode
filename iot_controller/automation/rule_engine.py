@@ -17,10 +17,12 @@ class RuleEngine:
         device_manager: DeviceManager,
         event_bus: EventBus,
         log_rule_evaluations: Optional[bool] = None,
+        command_dispatcher: Optional[Any] = None,
     ):
         self.rules_config = rules_config
         self.device_manager = device_manager
         self.event_bus = event_bus
+        self.command_dispatcher = command_dispatcher
         self.log_rule_evaluations = (
             log_rule_evaluations if log_rule_evaluations is not None else settings.log_rule_evaluations
         )
@@ -28,13 +30,16 @@ class RuleEngine:
         self._logger = get_logger("RuleEngine")
         # Track active trigger state for each rule: rule_id -> bool
         self._rule_states: Dict[str, bool] = {}
+        # Cache latest sensor payloads for immediate re-evaluation when control is restored
+        self._last_sensor_payloads: Dict[str, dict] = {}
 
     def start(self) -> None:
-        """Subscribe to device value change events."""
+        """Subscribe to device value change and control restored events."""
         if self._running:
             return
         self._running = True
         self.event_bus.subscribe("device.value_changed", self._on_device_value_changed)
+        self.event_bus.subscribe("device.control_restored", self._on_device_control_restored)
         self._logger.info(
             f"RuleEngine started with {len(self.rules_config)} rules configured (log_evaluations={self.log_rule_evaluations})."
         )
@@ -43,7 +48,41 @@ class RuleEngine:
         """Unsubscribe from event bus."""
         self._running = False
         self.event_bus.unsubscribe("device.value_changed", self._on_device_value_changed)
+        self.event_bus.unsubscribe("device.control_restored", self._on_device_control_restored)
         self._logger.info("RuleEngine stopped.")
+
+    async def _on_device_control_restored(self, event: Event) -> None:
+        """Re-evaluate rules immediately when manual override is released (restored to AUTO)."""
+        if not self._running:
+            return
+
+        restored_device_id = event.payload.get("device_id")
+        if not restored_device_id:
+            return
+
+        self._logger.info(
+            f"Control restored to AUTO for device '{restored_device_id}'. Re-evaluating rules..."
+        )
+
+        for rule_id, rule_cfg in self.rules_config.items():
+            if not rule_cfg.get("enabled", True):
+                continue
+
+            actions = rule_cfg.get("actions", [])
+            if any(act.get("device") == restored_device_id for act in actions):
+                # Reset rule state so edge-triggering permits immediate re-evaluation
+                self._rule_states[rule_id] = False
+
+                # Re-evaluate rule if sensor reading is cached
+                cond = rule_cfg.get("condition", {})
+                sensor_id = cond.get("device")
+                if sensor_id and sensor_id in self._last_sensor_payloads:
+                    mock_evt = Event(
+                        topic="device.value_changed",
+                        sender=sensor_id,
+                        payload=self._last_sensor_payloads[sensor_id],
+                    )
+                    await self._on_device_value_changed(mock_evt)
 
     async def _on_device_value_changed(self, event: Event) -> None:
         """Evaluate all rules when a sensor measurement is published using edge triggering."""
@@ -51,6 +90,7 @@ class RuleEngine:
             return
 
         payload = event.payload
+        self._last_sensor_payloads[event.sender] = payload
 
         for rule_id, rule_cfg in self.rules_config.items():
             if not rule_cfg.get("enabled", True):
@@ -74,12 +114,16 @@ class RuleEngine:
 
             if matched:
                 if not was_triggered or retrigger:
-                    self._rule_states[rule_id] = True
                     if self.log_rule_evaluations:
                         self._logger.info(
                             f"Rule '{rule_id}' [MATCH (Edge Trigger)]: {target_dev}.{prop} ({actual_val}) {op} {target_val} -> Executing {len(actions)} action(s)"
                         )
-                    await self._execute_actions(rule_id, actions)
+                    success = await self._execute_actions(rule_id, actions)
+                    if success:
+                        self._rule_states[rule_id] = True
+                    else:
+                        # Actions blocked by live override dispatcher -> keep rule state as False
+                        self._rule_states[rule_id] = False
                 else:
                     if self.log_rule_evaluations:
                         self._logger.debug(
@@ -98,8 +142,10 @@ class RuleEngine:
                             f"Rule '{rule_id}' [NO MATCH]: {target_dev}.{prop} ({actual_val}) {op} {target_val}"
                         )
 
-    async def _execute_actions(self, rule_id: str, actions: list) -> None:
-        """Execute configured actuator actions."""
+    async def _execute_actions(self, rule_id: str, actions: list) -> bool:
+        """Execute configured actuator actions. Returns True if all actions succeeded."""
+        all_succeeded = True
+
         for action in actions:
             target_id = action.get("device")
             command = action.get("command")
@@ -107,11 +153,36 @@ class RuleEngine:
 
             if not target_id or not command:
                 self._logger.warning(f"Rule '{rule_id}' action missing device or command.")
+                all_succeeded = False
+                continue
+
+            if self.command_dispatcher:
+                from services.live_command.models import CommandSource, LiveCommandRequest
+                req = LiveCommandRequest(
+                    device_id=target_id,
+                    action=command,
+                    params=args,
+                    source=CommandSource.RULE_ENGINE,
+                    user_id=f"rule:{rule_id}",
+                )
+                res = await self.command_dispatcher.dispatch(req)
+                if res.success:
+                    await self.event_bus.publish(
+                        topic="rule.triggered",
+                        sender=rule_id,
+                        payload={"rule_id": rule_id, "action": action, "result": res.state_payload},
+                    )
+                else:
+                    self._logger.info(
+                        f"Rule '{rule_id}' action on '{target_id}' blocked by command dispatcher: {res.message}"
+                    )
+                    all_succeeded = False
                 continue
 
             device = self.device_manager.get_device(target_id)
             if not device:
                 self._logger.error(f"Rule '{rule_id}' target device '{target_id}' not found.")
+                all_succeeded = False
                 continue
 
             try:
@@ -120,6 +191,7 @@ class RuleEngine:
                     self._logger.error(
                         f"Rule '{rule_id}': Device '{target_id}' has no command method '{command}'"
                     )
+                    all_succeeded = False
                     continue
 
                 self._logger.info(f"Rule '{rule_id}' action -> {target_id}.{command}({args if args else ''})")
@@ -134,3 +206,6 @@ class RuleEngine:
                 )
             except Exception as e:
                 self._logger.error(f"Error executing action for rule '{rule_id}' on '{target_id}': {e}")
+                all_succeeded = False
+
+        return all_succeeded
