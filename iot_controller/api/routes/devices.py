@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/v1/devices", tags=["Devices"])
 class CommandPayload(BaseModel):
     action: str = Field(
         ...,
-        description="Nombre de la acción o método a ejecutar sobre el actuador.",
+        description="Nombre de la acción o método a ejecutar sobre el actuador (ej. 'turn_on', 'turn_off', 'set_position').",
         examples=["turn_on", "turn_off", "set_position"]
     )
     params: Optional[Dict[str, Any]] = Field(
@@ -39,39 +39,40 @@ class CommandPayload(BaseModel):
         examples=[None, 300, 60]
     )
 
+    from pydantic import model_validator
+
+    @model_validator(mode="before")
+    @classmethod
+    def unwrap_value_wrapper(cls, data: Any) -> Any:
+        """Unwrap payload if client or OpenAPI example sent wrapped object {'value': {...}}."""
+        if isinstance(data, dict):
+            if "value" in data and isinstance(data["value"], dict):
+                inner = data["value"]
+                if "action" in inner:
+                    return inner
+        return data
+
     model_config = ConfigDict(
         json_schema_extra={
             "examples": [
                 {
-                    "summary": "1. Encendido Manual de Relé (Bomba de agua / Válvula)",
-                    "description": "Ejecuta 'turn_on' y bloquea el estado en MANUAL_ON de forma indefinida.",
-                    "value": {
-                        "action": "turn_on",
-                        "params": {},
-                        "target_mode": "MANUAL_ON",
-                        "user_id": "operador_sala_1",
-                        "ttl_seconds": None
-                    }
+                    "action": "turn_on",
+                    "params": {},
+                    "target_mode": "MANUAL_ON",
+                    "user_id": "operador_sala_1",
+                    "ttl_seconds": None
                 },
                 {
-                    "summary": "2. Apagado Manual de Relé",
-                    "description": "Ejecuta 'turn_off' y bloquea el estado en MANUAL_OFF.",
-                    "value": {
-                        "action": "turn_off",
-                        "params": {},
-                        "target_mode": "MANUAL_OFF",
-                        "user_id": "operador_sala_1"
-                    }
+                    "action": "turn_off",
+                    "params": {},
+                    "target_mode": "MANUAL_OFF",
+                    "user_id": "operador_sala_1"
                 },
                 {
-                    "summary": "3. Comando Servo de Posición con Temporizador (TTL)",
-                    "description": "Fija la posición del servo a 90 grados durante 5 minutos (300 s). Al terminar, vuelve a AUTO.",
-                    "value": {
-                        "action": "set_position",
-                        "params": {"angle": 90},
-                        "user_id": "sistema_ventilacion",
-                        "ttl_seconds": 300
-                    }
+                    "action": "set_position",
+                    "params": {"angle": 90},
+                    "user_id": "sistema_ventilacion",
+                    "ttl_seconds": 300
                 }
             ]
         }

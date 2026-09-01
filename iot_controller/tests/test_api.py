@@ -111,6 +111,27 @@ class TestFastAPIWebService(unittest.IsolatedAsyncioTestCase):
         overrides_final = self.client.get("/api/v1/overrides").json()
         self.assertEqual(len(overrides_final), 0)
 
+    def test_wrapped_payload_and_alias_commands(self):
+        # Test wrapped Swagger UI format payload
+        wrapped_json = {
+            "summary": "1. Encendido Manual de Relé",
+            "description": "Ejecuta turn_on",
+            "value": {
+                "action": "on",
+                "params": {},
+                "target_mode": "MANUAL_ON",
+                "user_id": "operador_sala_1"
+            }
+        }
+        resp = self.client.post("/api/v1/devices/pump_01/command", json=wrapped_json)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["current_mode"], "MANUAL_ON")
+
+        # Clean up
+        self.client.post("/api/v1/devices/pump_01/restore-control")
+
     def test_raw_pin_command(self):
         pin_resp = self.client.post(
             "/api/v1/nodes/n1/pin",
