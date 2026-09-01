@@ -56,22 +56,28 @@ rules:
         self.temp_dir.cleanup()
 
     async def test_full_system_lifecycle(self):
-        system = ControllerSystem(self.config_path)
-        await system.start()
+        from core.settings import settings
+        prev_enable = settings.enable_api
+        settings.enable_api = False
+        try:
+            system = ControllerSystem(self.config_path)
+            await system.start()
 
-        self.assertTrue(system._running)
-        health = system.health_monitor.get_system_health()
+            self.assertTrue(system._running)
+            health = system.health_monitor.get_system_health()
 
-        self.assertIn("nodes", health)
-        self.assertIn("n1", health["nodes"])
-        self.assertEqual(health["nodes"]["n1"]["status"], "CONNECTED")
+            self.assertIn("nodes", health)
+            self.assertIn("n1", health["nodes"])
+            self.assertEqual(health["nodes"]["n1"]["status"], "CONNECTED")
 
-        self.assertIn("devices", health)
-        self.assertIn("ldr_01", health["devices"])
-        self.assertIn("pump_01", health["devices"])
+            self.assertIn("devices", health)
+            self.assertIn("ldr_01", health["devices"])
+            self.assertIn("pump_01", health["devices"])
 
-        await system.stop()
-        self.assertFalse(system._running)
+            await system.stop()
+            self.assertFalse(system._running)
+        finally:
+            settings.enable_api = prev_enable
 
     async def test_system_with_api_enabled(self):
         from core.settings import settings

@@ -166,7 +166,7 @@ class ControllerSystem:
             if self.api_task and not self.api_task.done():
                 try:
                     await asyncio.wait_for(self.api_task, timeout=3.0)
-                except (asyncio.TimeoutError, asyncio.CancelledError):
+                except (asyncio.TimeoutError, asyncio.CancelledError, SystemExit, Exception):
                     pass
 
         if self.health_monitor:
