@@ -77,18 +77,41 @@ class CommandDispatcher:
                     state_payload=device.get_state(),
                 )
 
+        # Action Alias Normalization
+        canonical_action = action_name
+        if not hasattr(device, canonical_action):
+            aliases = {
+                "on": "turn_on", "ON": "turn_on", "1": "turn_on", "enable": "turn_on", "turnOn": "turn_on",
+                "off": "turn_off", "OFF": "turn_off", "0": "turn_off", "disable": "turn_off", "turnOff": "turn_off",
+            }
+            if canonical_action in aliases:
+                canonical_action = aliases[canonical_action]
+
         # Determine target mode if this is a live manual command
         target_mode = request.target_mode
         if source == CommandSource.LIVE_MANUAL and target_mode is None:
-            if action_name in ("turn_on", "ON", "1"):
+            if canonical_action == "turn_on":
                 target_mode = ControlMode.MANUAL_ON
-            elif action_name in ("turn_off", "OFF", "0"):
+            elif canonical_action == "turn_off":
                 target_mode = ControlMode.MANUAL_OFF
             else:
                 target_mode = ControlMode.MANUAL_VALUE
 
+        # Verify Node Connectivity
+        if not device.node.is_connected():
+            msg = f"Node '{device.node.id}' attached to device '{device_id}' is DISCONNECTED."
+            self._logger.warning(msg)
+            return CommandExecutionResult(
+                success=False,
+                device_id=device_id,
+                applied_action=action_name,
+                current_mode=current_state.mode,
+                message=msg,
+                state_payload=device.get_state(),
+            )
+
         # Execute hardware command on device
-        action_method = getattr(device, action_name, None)
+        action_method = getattr(device, canonical_action, None)
         if not action_method or not callable(action_method):
             return CommandExecutionResult(
                 success=False,

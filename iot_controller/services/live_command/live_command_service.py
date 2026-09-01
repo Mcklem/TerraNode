@@ -58,6 +58,14 @@ class LiveCommandService:
         state = self.override_registry.restore_control(device_id)
         device = self.device_manager.get_device(device_id)
         payload = device.get_state() if device else {}
+
+        if self.dispatcher and self.dispatcher.event_bus:
+            await self.dispatcher.event_bus.publish(
+                "device.control_restored",
+                sender="LiveCommandService",
+                payload={"device_id": device_id},
+            )
+
         return CommandExecutionResult(
             success=True,
             device_id=device_id,

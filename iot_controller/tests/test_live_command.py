@@ -134,6 +134,36 @@ class TestLiveCommandService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res["pin"], "D5")
         self.assertEqual(res["value"], 1)
 
+    async def test_restore_control_immediately_reactivates_rule(self):
+        pump: RelayActuator = self.dm.get_device("pump_01")
+
+        # 1. Publish sensor reading (soil = 85 > 70) -> Rule 'irrigation_stop' triggers turn_off
+        await self.bus.publish(
+            "device.value_changed",
+            sender="soil_01",
+            payload={"id": "soil_01", "value": 85.0, "status": "OK"},
+        )
+        self.assertEqual(pump.current_state, "OFF")
+
+        # 2. User forces pump ON via live command (MANUAL_ON)
+        await self.live_service.execute_live_command("pump_01", "turn_on")
+        self.assertEqual(pump.current_state, "ON")
+
+        # 3. Another sensor reading arrives while soil = 90 > 70 (Condition is TRUE, but blocked by MANUAL_ON)
+        await self.bus.publish(
+            "device.value_changed",
+            sender="soil_01",
+            payload={"id": "soil_01", "value": 90.0, "status": "OK"},
+        )
+        self.assertEqual(pump.current_state, "ON")  # Still ON because override is active
+
+        # 4. Restore control to AUTO
+        res = await self.live_service.restore_control("pump_01")
+        self.assertTrue(res.success)
+
+        # 5. Verify pump IMMEDIATELY turns back OFF because rule re-evaluated and condition was true!
+        self.assertEqual(pump.current_state, "OFF")
+
 
 if __name__ == "__main__":
     unittest.main()
