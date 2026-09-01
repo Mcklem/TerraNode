@@ -1,0 +1,75 @@
+system:
+  name: parcela_controller
+  version: "1.0"
+  database: "controller.db"
+
+nodes:
+  weather_01:
+    driver: firmata
+    host: 192.168.1.37
+    port: 3030
+    enabled: true
+    devices:
+      light_01:
+        type: ldr
+        pin: A0
+        poll_interval: 10
+
+      environment_01:
+        type: bmp180
+        bus: i2c
+        address: 0x77
+        poll_interval: 60
+
+  irrigation_01:
+    driver: firmata
+    host: 192.168.1.38
+    port: 3030
+    enabled: true
+    devices:
+      soil_01:
+        type: soil_moisture
+        pin: A0
+        poll_interval: 300
+        calibration:
+          dry: 900
+          wet: 350
+
+      irrigation_pump:
+        type: relay
+        pin: D5
+        active_low: true
+
+      valve_01:
+        type: relay
+        pin: D6
+        active_low: true
+
+      vent_servo:
+        type: servo
+        pin: D7
+        min_angle: 0
+        max_angle: 180
+
+rules:
+  irrigation_start:
+    enabled: true
+    condition:
+      device: soil_01
+      property: value
+      operator: "<"
+      value: 30
+    actions:
+      - device: irrigation_pump
+        command: turn_on
+
+  irrigation_stop:
+    enabled: true
+    condition:
+      device: soil_01
+      property: value
+      operator: ">"
+      value: 60
+    actions:
+      - device: irrigation_pump
+        command: turn_off

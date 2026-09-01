@@ -1,0 +1,156 @@
+# ==============================================================================
+# SYSTEM CONFIGURATION TEMPLATE & REFERENCE GUIDE
+# ==============================================================================
+#
+# 1. SYSTEM SECTION:
+#    name: Name of the controller system/installation.
+#    version: Version identifier.
+#    database: SQLite database file or connection string (default: controller.db).
+#    log_readings: Set true/false to log sensor measurements in real-time.
+#    log_rule_evaluations: Set true/false to log rule condition evaluations.
+#
+# 2. NODES SECTION:
+#    Each node key represents a NodeMCU ESP8266 board (e.g. weather_01).
+#    - driver: "firmata" (physical board over WiFi) or "mock" (simulation).
+#    - host: IP address of the NodeMCU (e.g. 192.168.1.37).
+#    - port: Firmata TCP port (default: 3030).
+#    - enabled: Set true/false to enable or disable the node.
+#    - arduino_wait: Seconds to wait for Firmata firmware response (default: 5).
+#    - max_retries: Connection retries on startup (default: 3).
+#    - timeout: Connection timeout per attempt in seconds (default: 12).
+#
+# 3. DEVICES SECTION (SUPPORTED DEVICE TYPES):
+#    Devices are defined inside their parent node under the 'devices:' block.
+#
+#    - LDR Light Sensor:
+#        type: ldr
+#        pin: A0                   # Analog pin (e.g. A0)
+#        poll_interval: 10         # Polling interval in seconds
+#
+#    - BMP180 Temperature & Pressure Sensor (I2C):
+#        type: bmp180
+#        bus: i2c                  # Bus type
+#        address: 0x77             # I2C hexadecimal address (e.g. 0x77) This address must be unique by node, all I2C will share SCL and SDA pins (SCL → D1) (SDA → D2)
+#        poll_interval: 60         # Polling interval in seconds
+#
+#    - Soil Moisture Sensor:
+#        type: soil_moisture
+#        pin: A0                   # Analog pin
+#        poll_interval: 300        # Polling interval in seconds
+#        calibration:              # Raw analog mapping (dry -> 0%, wet -> 100%)
+#          dry: 900
+#          wet: 350
+#
+#    - Relay Actuator:
+#        type: relay
+#        pin: D5                   # Digital GPIO pin (e.g. D5, D6)
+#        active_low: true          # Set true for active-low relay modules
+#
+#    - Servo Actuator:
+#        type: servo
+#        pin: D7                   # Digital PWM pin (e.g. D7)
+#        min_angle: 0              # Min angle in degrees (0-180)
+#        max_angle: 180            # Max angle in degrees (0-180)
+#
+# 4. RULES SECTION:
+#    Declarative automation rules evaluating sensor conditions.
+#    - enabled: Set true/false to enable the rule.
+#    - condition:
+#        device: Target sensor ID (e.g. light_01, soil_01, environment_01)
+#        property: Property to evaluate ("value", "temperature", "pressure", "humidity")
+#        operator: Comparison operator ("<", ">", "<=", ">=", "==", "!=")
+#        value: Numeric threshold to compare against
+#    - actions:
+#        List of target actuator commands:
+#        - device: Target actuator ID (e.g. vent_servo, irrigation_pump)
+#          command: Method to execute ("turn_on", "turn_off", "set_position")
+#          args: Arguments dict (e.g. { target_angle: 180 } for servo)
+# ==============================================================================
+
+system:
+  name: parcela_controller
+  version: "1.0"
+  database: "controller.db"
+  log_readings: true
+  log_rule_evaluations: true
+
+nodes:
+  weather_01:
+    driver: firmata
+    host: 192.168.1.37
+    port: 3030
+    enabled: true
+    arduino_wait: 5
+    max_retries: 3
+    timeout: 12
+    devices:
+      light_01:
+        type: ldr
+        pin: A0
+        poll_interval: 10
+
+      environment_01:
+        type: bmp180
+        bus: i2c
+        address: 0x77
+        poll_interval: 10
+
+      irrigation_pump:
+        type: relay
+        pin: D5
+        active_low: true
+
+      vent_servo:
+        type: servo
+        pin: D7
+        min_angle: 0
+        max_angle: 180
+
+rules:
+  irrigation_start:
+    enabled: true
+    condition:
+      device: light_01
+      property: value
+      operator: "<"
+      value: 400
+    actions:
+      - device: irrigation_pump
+        command: turn_on
+
+  irrigation_stop:
+    enabled: true
+    condition:
+      device: light_01
+      property: value
+      operator: ">="
+      value: 400
+    actions:
+      - device: irrigation_pump
+        command: turn_off
+
+  temp_high_open_vent:
+    enabled: true
+    condition:
+      device: environment_01
+      property: temperature
+      operator: ">"
+      value: 30
+    actions:
+      - device: vent_servo
+        command: set_position
+        args:
+          target_angle: 180
+
+  temp_low_close_vent:
+    enabled: true
+    condition:
+      device: environment_01
+      property: temperature
+      operator: "<"
+      value: 30
+    actions:
+      - device: vent_servo
+        command: set_position
+        args:
+          target_angle: 0
