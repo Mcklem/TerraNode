@@ -38,6 +38,9 @@ class ControllerSystem:
 
         self.db: Optional[Database] = None
         self.storage_manager: Optional[StorageManager] = None
+        self.override_registry: Optional[Any] = None
+        self.command_dispatcher: Optional[Any] = None
+        self.live_command_service: Optional[Any] = None
         self.rule_engine: Optional[RuleEngine] = None
         self.health_monitor: Optional[HealthMonitor] = None
         self._running: bool = False
@@ -84,11 +87,30 @@ class ControllerSystem:
         self.scheduler.log_readings = log_readings
         await self.scheduler.start()
 
+        # 11b. Initialize Live Command & Override Service Layer
+        from services.live_command import CommandDispatcher, LiveCommandService, OverrideRegistry
+        self.override_registry = OverrideRegistry()
+        self.command_dispatcher = CommandDispatcher(
+            device_manager=self.device_manager,
+            override_registry=self.override_registry,
+            event_bus=self.event_bus,
+        )
+        self.live_command_service = LiveCommandService(
+            device_manager=self.device_manager,
+            node_manager=self.node_manager,
+            override_registry=self.override_registry,
+            dispatcher=self.command_dispatcher,
+        )
+
         # 12. Start Rule Engine
         rules_cfg = self.config.get("rules", {})
         log_rule_evaluations = sys_cfg.get("log_rule_evaluations", settings.log_rule_evaluations)
         self.rule_engine = RuleEngine(
-            rules_cfg, self.device_manager, self.event_bus, log_rule_evaluations=log_rule_evaluations
+            rules_cfg,
+            self.device_manager,
+            self.event_bus,
+            log_rule_evaluations=log_rule_evaluations,
+            command_dispatcher=self.command_dispatcher,
         )
         self.rule_engine.start()
 

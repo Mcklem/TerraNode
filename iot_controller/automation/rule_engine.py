@@ -17,10 +17,12 @@ class RuleEngine:
         device_manager: DeviceManager,
         event_bus: EventBus,
         log_rule_evaluations: Optional[bool] = None,
+        command_dispatcher: Optional[Any] = None,
     ):
         self.rules_config = rules_config
         self.device_manager = device_manager
         self.event_bus = event_bus
+        self.command_dispatcher = command_dispatcher
         self.log_rule_evaluations = (
             log_rule_evaluations if log_rule_evaluations is not None else settings.log_rule_evaluations
         )
@@ -107,6 +109,28 @@ class RuleEngine:
 
             if not target_id or not command:
                 self._logger.warning(f"Rule '{rule_id}' action missing device or command.")
+                continue
+
+            if self.command_dispatcher:
+                from services.live_command.models import CommandSource, LiveCommandRequest
+                req = LiveCommandRequest(
+                    device_id=target_id,
+                    action=command,
+                    params=args,
+                    source=CommandSource.RULE_ENGINE,
+                    user_id=f"rule:{rule_id}",
+                )
+                res = await self.command_dispatcher.dispatch(req)
+                if res.success:
+                    await self.event_bus.publish(
+                        topic="rule.triggered",
+                        sender=rule_id,
+                        payload={"rule_id": rule_id, "action": action, "result": res.state_payload},
+                    )
+                else:
+                    self._logger.info(
+                        f"Rule '{rule_id}' action on '{target_id}' blocked by command dispatcher: {res.message}"
+                    )
                 continue
 
             device = self.device_manager.get_device(target_id)
