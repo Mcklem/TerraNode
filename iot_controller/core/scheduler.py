@@ -64,6 +64,7 @@ class Scheduler:
         await asyncio.sleep(0.1)
 
         while self._running:
+            loop_start = time.time()
             try:
                 state = await sensor.read()
                 val = state.get("value")
@@ -100,8 +101,11 @@ class Scheduler:
             except Exception as e:
                 dev_logger.error(f"Error polling sensor: {e}")
 
-            # Sleep until next poll interval
+            # Calculate remaining sleep duration to prevent timing drift
+            elapsed = time.time() - loop_start
+            sleep_duration = max(0.1, interval - elapsed)
+
             try:
-                await asyncio.sleep(interval)
+                await asyncio.sleep(sleep_duration)
             except asyncio.CancelledError:
                 break

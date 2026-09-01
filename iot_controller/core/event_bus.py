@@ -42,15 +42,21 @@ class EventBus:
 
         for pattern, handlers in self._listeners.items():
             if self._topic_matches(pattern, topic):
-                matched_handlers.extend(handlers)
+                for h in handlers:
+                    if h not in matched_handlers:
+                        matched_handlers.append(h)
 
-        for handler in matched_handlers:
+        async def _invoke_safe(handler: EventHandler):
             try:
                 res = handler(event)
                 if asyncio.iscoroutine(res):
                     await res
             except Exception as e:
                 self._logger.error(f"Error in event handler for topic '{topic}': {e}", exc_info=True)
+
+        if matched_handlers:
+            tasks = [_invoke_safe(h) for h in matched_handlers]
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     @staticmethod
     def _topic_matches(pattern: str, topic: str) -> bool:

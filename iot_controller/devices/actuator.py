@@ -1,6 +1,6 @@
 import time
 from abc import abstractmethod
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from .base_device import BaseDevice
 from nodes.base_node import BaseNode
 

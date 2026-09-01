@@ -24,6 +24,7 @@ class HealthMonitor:
         self.check_interval = check_interval
         self._task: Optional[asyncio.Task] = None
         self._running: bool = False
+        self._reconnecting_nodes: set = set()
         self._logger = get_logger("HealthMonitor")
 
     async def start(self) -> None:
@@ -42,6 +43,7 @@ class HealthMonitor:
             except asyncio.CancelledError:
                 pass
             self._task = None
+        self._reconnecting_nodes.clear()
         self._logger.info("HealthMonitor stopped.")
 
     async def _monitor_loop(self) -> None:
@@ -64,10 +66,11 @@ class HealthMonitor:
             if not node.enabled:
                 continue
 
-            if not node.is_connected() and node.status != NodeStatus.RECONNECTING:
+            if not node.is_connected() and node.status != NodeStatus.RECONNECTING and node.id not in self._reconnecting_nodes:
                 self._logger.warning(
                     f"Node '{node.id}' is disconnected ({node.status.value}). Triggering auto-reconnect..."
                 )
+                self._reconnecting_nodes.add(node.id)
                 await self.event_bus.publish(
                     topic="node.status_changed",
                     sender=node.id,
@@ -94,6 +97,8 @@ class HealthMonitor:
                 self._logger.warning(f"Reconnection attempt failed for node '{node.id}'.")
         except Exception as e:
             self._logger.error(f"Exception during node reconnect for '{node.id}': {e}")
+        finally:
+            self._reconnecting_nodes.discard(node.id)
 
     def get_system_health(self) -> Dict[str, dict]:
         return {

@@ -156,9 +156,6 @@ class ControllerSystem:
 
     async def stop(self) -> None:
         """Graceful shutdown of all subsystems."""
-        if not self._running:
-            return
-
         self.logger.info("Shutting down Distributed IoT Hardware Controller...")
 
         if self.api_server:
@@ -170,17 +167,40 @@ class ControllerSystem:
                     pass
 
         if self.health_monitor:
-            await self.health_monitor.stop()
+            try:
+                await self.health_monitor.stop()
+            except Exception as e:
+                self.logger.warning(f"Error stopping HealthMonitor: {e}")
 
         if self.rule_engine:
-            self.rule_engine.stop()
+            try:
+                self.rule_engine.stop()
+            except Exception as e:
+                self.logger.warning(f"Error stopping RuleEngine: {e}")
 
-        await self.scheduler.stop()
-        await self.device_manager.stop_all()
-        await self.node_manager.disconnect_all()
+        if self.scheduler:
+            try:
+                await self.scheduler.stop()
+            except Exception as e:
+                self.logger.warning(f"Error stopping Scheduler: {e}")
+
+        if self.device_manager:
+            try:
+                await self.device_manager.stop_all()
+            except Exception as e:
+                self.logger.warning(f"Error stopping devices: {e}")
+
+        if self.node_manager:
+            try:
+                await self.node_manager.disconnect_all()
+            except Exception as e:
+                self.logger.warning(f"Error disconnecting nodes: {e}")
 
         if self.storage_manager:
-            self.storage_manager.stop()
+            try:
+                self.storage_manager.stop()
+            except Exception as e:
+                self.logger.warning(f"Error stopping StorageManager: {e}")
 
         self._running = False
         self.logger.info("System shutdown complete.")

@@ -78,6 +78,10 @@ class MockNode(BaseNode):
         pin_num = parse_pin(pin)
         return self.analog_pins.get(pin_num, 512)
 
+    def analog_write(self, pin: Union[str, int], value: int) -> None:
+        pin_num = parse_pin(pin)
+        self.analog_pins[pin_num] = int(value)
+
     def servo_write(self, pin: Union[str, int], angle: int) -> None:
         pin_num = parse_pin(pin)
         self.servo_positions[pin_num] = angle

@@ -142,6 +142,18 @@ class FirmataNode(BaseNode):
             return res[0] if res else 0
         return 0
 
+    def analog_write(self, pin: Union[str, int], value: int) -> None:
+        pin_num = parse_pin(pin)
+        if self._board:
+            try:
+                self._board.set_pin_mode_pwm(pin_num)
+            except Exception:
+                pass
+            if hasattr(self._board, "pwm_write"):
+                self._board.pwm_write(pin_num, value)
+            elif hasattr(self._board, "analog_write"):
+                self._board.analog_write(pin_num, value)
+
     def servo_write(self, pin: Union[str, int], angle: int) -> None:
         pin_num = parse_pin(pin)
         if self._board:
@@ -170,7 +182,8 @@ class FirmataNode(BaseNode):
                 raw_bytes = data[3:-1] if isinstance(data[-1], float) else data[3:]
                 if len(raw_bytes) >= num_bytes:
                     result_raw = list(raw_bytes[:num_bytes])
-                    loop.call_soon_threadsafe(event.set)
+                    if not loop.is_closed():
+                        loop.call_soon_threadsafe(event.set)
 
         self._board.i2c_read(address, register, num_bytes, callback=_i2c_cb)
 
@@ -186,3 +199,11 @@ class FirmataNode(BaseNode):
             raise RuntimeError(
                 f"Node {self.id}: Timeout reading I2C address 0x{address:02X} register 0x{register:02X}"
             )
+        finally:
+            if self._board and hasattr(self._board, "i2c_map") and address in self._board.i2c_map:
+                try:
+                    with self._board.the_i2c_map_lock:
+                        if self._board.i2c_map[address].get("callback") == _i2c_cb:
+                            self._board.i2c_map[address]["callback"] = None
+                except Exception:
+                    pass

@@ -134,6 +134,16 @@ class TestLiveCommandService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res["pin"], "D5")
         self.assertEqual(res["value"], 1)
 
+    async def test_raw_node_analog_write_command(self):
+        # Execute raw node analog write
+        res = await self.live_service.execute_raw_node_command("n1", "analog_write", "D1", 128)
+        self.assertEqual(res["node_id"], "n1")
+        self.assertEqual(res["pin"], "D1")
+        self.assertEqual(res["command"], "analog_write")
+        self.assertEqual(res["value"], 128)
+        node = self.nm.get_node("n1")
+        self.assertEqual(node.analog_pins.get(5), 128)
+
     async def test_restore_control_immediately_reactivates_rule(self):
         pump: RelayActuator = self.dm.get_device("pump_01")
 

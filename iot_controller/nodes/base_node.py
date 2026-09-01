@@ -156,6 +156,10 @@ class BaseNode(ABC):
         pass
 
     @abstractmethod
+    def analog_write(self, pin: Union[str, int], value: int) -> None:
+        pass
+
+    @abstractmethod
     def servo_write(self, pin: Union[str, int], angle: int) -> None:
         pass
 

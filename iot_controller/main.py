@@ -38,18 +38,32 @@ async def main_async(config_path: Optional[str], db_url: Optional[str], use_mock
 
         stop_event = asyncio.Event()
 
-        def _signal_handler():
+        def _signal_handler(*args):
             stop_event.set()
 
         loop = asyncio.get_running_loop()
+        handlers_added = False
         for sig in (signal.SIGINT, signal.SIGTERM):
             try:
                 loop.add_signal_handler(sig, _signal_handler)
+                handlers_added = True
             except NotImplementedError:
                 pass
 
+        if not handlers_added:
+            # Windows fallback: register standard signal handler
+            try:
+                signal.signal(signal.SIGINT, lambda s, f: loop.call_soon_threadsafe(stop_event.set))
+                signal.signal(signal.SIGTERM, lambda s, f: loop.call_soon_threadsafe(stop_event.set))
+            except Exception:
+                pass
+
         try:
-            await stop_event.wait()
+            while not stop_event.is_set():
+                try:
+                    await asyncio.wait_for(stop_event.wait(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    pass
         except KeyboardInterrupt:
             pass
 
