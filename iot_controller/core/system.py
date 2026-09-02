@@ -62,7 +62,7 @@ class ControllerSystem:
         db_url_override = sys_cfg.get("database") or self.database_url
         self.db = Database(database_url=db_url_override)
         await self.db.initialize()
-        self.storage_manager = StorageManager(self.db, self.event_bus)
+        self.storage_manager = StorageManager(self.db, self.event_bus, node_manager=self.node_manager)
         self.storage_manager.start()
 
         # 5. Initialize Node Manager
@@ -76,6 +76,13 @@ class ControllerSystem:
         # 6. Connect Nodes
         self.logger.info("Connecting hardware nodes...")
         await self.node_manager.connect_all()
+        for node in self.node_manager.get_all_nodes():
+            if node.is_connected():
+                await self.event_bus.publish(
+                    "node.status_changed",
+                    sender=node.id,
+                    payload={"status": "CONNECTED"},
+                )
 
         # 7. Validate pins/buses & 8. Initialize Device Manager & 9. Initialize devices
         devices_cfg = self.config.get("devices", {})
@@ -127,6 +134,7 @@ class ControllerSystem:
         system_container.health_monitor = self.health_monitor
         system_container.live_command_service = self.live_command_service
         system_container.override_registry = self.override_registry
+        system_container.db = self.db
 
         # 13b. Start FastAPI Web Service if enabled in settings
         if settings.enable_api:

@@ -61,8 +61,16 @@ class FirmataNode(BaseNode):
                 self._logger.info(f"Successfully connected to Node {self.id} (latency: {self._latency_ms:.1f}ms).")
                 return True
             except Exception as e:
+                err_str = str(e)
                 err_msg = f"Connection attempt {attempt} failed for {self.id} ({self.host}:{self.port}): {e}"
                 self._logger.warning(err_msg)
+                if "Sketch Firmware Version Not Found" in err_str:
+                    self._logger.error(
+                        f"[DIAGNOSTIC HINT] Node '{self.id}' ({self.host}:{self.port}) did not respond to Firmata query. "
+                        "1) Ensure StandardFirmataWiFi/ConfigurableFirmata is flashed on NodeMCU. "
+                        "2) Check IP and port in system.yaml. "
+                        "3) Run with '--mock' / MOCK_NODES=true if testing without physical hardware."
+                    )
                 if self._board:
                     try:
                         self._board.shutdown()

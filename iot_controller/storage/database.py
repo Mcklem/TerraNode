@@ -13,29 +13,21 @@ class Base(DeclarativeBase):
     pass
 
 
-class NodeModel(Base):
-    __tablename__ = "nodes"
+class NodeHistoryModel(Base):
+    """Historical append-only record of node connectivity events and IP details."""
+    __tablename__ = "node_history"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    driver: Mapped[str] = mapped_column(String(32), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[float] = mapped_column(Float, nullable=False, index=True)
+    node_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     host: Mapped[str] = mapped_column(String(128), nullable=False)
     port: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(String(32), nullable=False)
-    last_seen: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    updated_at: Mapped[float] = mapped_column(Float, nullable=False, default=time.time)
-
-
-class DeviceModel(Base):
-    __tablename__ = "devices"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    type: Mapped[str] = mapped_column(String(32), nullable=False)
-    node_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    status: Mapped[str] = mapped_column(String(32), nullable=False)
-    updated_at: Mapped[float] = mapped_column(Float, nullable=False, default=time.time)
+    driver: Mapped[str] = mapped_column(String(32), nullable=False)
+    event: Mapped[str] = mapped_column(String(32), nullable=False)
 
 
 class MeasurementModel(Base):
+    """Historical telemetry series of sensor measurements."""
     __tablename__ = "measurements"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -47,6 +39,7 @@ class MeasurementModel(Base):
 
 
 class EventModel(Base):
+    """Historical event stream audit log of system events."""
     __tablename__ = "events"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -57,12 +50,15 @@ class EventModel(Base):
 
 
 class ActuatorHistoryModel(Base):
+    """Historical record of actuator state changes and commands."""
     __tablename__ = "actuator_history"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[float] = mapped_column(Float, nullable=False, index=True)
     device_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
 
 class Database:
