@@ -7,6 +7,7 @@ import { Header } from './dashboard/Header'
 import { HealthGrid } from './dashboard/HealthGrid'
 import { NodeGrid } from './dashboard/NodeGrid'
 import { OverrideList } from './dashboard/OverrideList'
+import { HistorySection } from './dashboard/history/HistorySection'
 import { ToastNotification } from './dashboard/ToastNotification'
 
 export default function TerraNodeDashboard() {
@@ -88,6 +89,8 @@ export default function TerraNodeDashboard() {
           onRestoreAll={restoreAllOverrides}
           busyId={busyId}
         />
+
+        <HistorySection />
       </div>
 
       <ToastNotification message={toast} onClose={() => setToast('')} />

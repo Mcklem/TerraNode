@@ -1,3 +1,5 @@
+import os
+import tempfile
 import unittest
 from fastapi.testclient import TestClient
 from api.app import create_app
@@ -8,11 +10,17 @@ from core.node_manager import NodeManager
 from core.pin_manager import PinManager
 from monitoring.health import HealthMonitor
 from services.live_command import CommandDispatcher, LiveCommandService, OverrideRegistry
+from storage.database import ActuatorHistoryModel, Database, EventModel, MeasurementModel, NodeHistoryModel
 
 
 class TestFastAPIWebService(unittest.IsolatedAsyncioTestCase):
 
     async def asyncSetUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.db_path = os.path.join(self.temp_dir.name, "test.db")
+        self.db = Database(database_url=self.db_path)
+        await self.db.initialize()
+
         self.nm = NodeManager()
         self.pm = PinManager()
         self.dm = DeviceManager(self.nm, self.pm)
@@ -46,6 +54,7 @@ class TestFastAPIWebService(unittest.IsolatedAsyncioTestCase):
         system_container.health_monitor = self.health_mon
         system_container.live_command_service = self.live_service
         system_container.override_registry = self.override_reg
+        system_container.db = self.db
 
         app = create_app()
         self.client = TestClient(app)
@@ -53,6 +62,8 @@ class TestFastAPIWebService(unittest.IsolatedAsyncioTestCase):
     async def asyncTearDown(self):
         await self.dm.stop_all()
         await self.nm.disconnect_all()
+        self.db.close()
+        self.temp_dir.cleanup()
 
     def test_health_endpoints(self):
         resp = self.client.get("/api/v1/health")
@@ -139,6 +150,55 @@ class TestFastAPIWebService(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(pin_resp.status_code, 200)
         self.assertEqual(pin_resp.json()["status"], "success")
+
+    async def test_history_paginated_endpoints(self):
+        # Seed test database with records
+        def _seed(session):
+            m1 = MeasurementModel(timestamp=100.0, device_id="soil_01", value=45.0, unit="%", status="OK")
+            m2 = MeasurementModel(timestamp=200.0, device_id="soil_01", value=50.0, unit="%", status="OK")
+            m3 = MeasurementModel(timestamp=300.0, device_id="ldr_01", value=512.0, unit="raw", status="OK")
+            session.add_all([m1, m2, m3])
+
+            act1 = ActuatorHistoryModel(timestamp=150.0, device_id="pump_01", state="turn_on", source="LIVE_MANUAL", user_id="juan")
+            session.add(act1)
+
+            node1 = NodeHistoryModel(timestamp=50.0, node_id="n1", host="127.0.0.1", port=3030, driver="mock", event="CONNECTED")
+            session.add(node1)
+
+            evt1 = EventModel(timestamp=60.0, topic="rule.triggered", sender="RuleEngine", payload="{}")
+            session.add(evt1)
+
+        await self.db.run_in_session(_seed)
+
+        # 1. Test /api/v1/history/measurements with filter and pagination
+        resp_m = self.client.get("/api/v1/history/measurements?device_id=soil_01&limit=1&offset=0")
+        self.assertEqual(resp_m.status_code, 200)
+        data_m = resp_m.json()
+        self.assertEqual(data_m["total"], 2)
+        self.assertEqual(data_m["limit"], 1)
+        self.assertEqual(len(data_m["data"]), 1)
+        self.assertEqual(data_m["data"][0]["timestamp"], 200.0)  # Descending order
+
+        # 2. Test /api/v1/history/actuators
+        resp_a = self.client.get("/api/v1/history/actuators")
+        self.assertEqual(resp_a.status_code, 200)
+        data_a = resp_a.json()
+        self.assertEqual(data_a["total"], 1)
+        self.assertEqual(data_a["data"][0]["user_id"], "juan")
+
+        # 3. Test /api/v1/history/nodes
+        resp_n = self.client.get("/api/v1/history/nodes?node_id=n1")
+        self.assertEqual(resp_n.status_code, 200)
+        data_n = resp_n.json()
+        self.assertEqual(data_n["total"], 1)
+        self.assertEqual(data_n["data"][0]["event"], "CONNECTED")
+
+        # 4. Test /api/v1/history/events
+        resp_e = self.client.get("/api/v1/history/events?topic=rule.triggered")
+        self.assertEqual(resp_e.status_code, 200)
+        data_e = resp_e.json()
+        self.assertEqual(data_e["total"], 1)
+        self.assertEqual(data_e["data"][0]["sender"], "RuleEngine")
 
 
 if __name__ == "__main__":

@@ -9,15 +9,47 @@ import {
   Override,
   OverrideSchema,
   TerraNode,
+  PaginatedMeasurementsSchema,
+  PaginatedActuatorsSchema,
+  PaginatedNodesSchema,
+  PaginatedEventsSchema,
   type Mode,
   type DeviceStatus,
   type NodeStatus,
   type CommandPayload,
   type CommandResult,
   type RawPinPayload,
+  type MeasurementRecord,
+  type PaginatedMeasurements,
+  type ActuatorHistoryRecord,
+  type PaginatedActuators,
+  type NodeHistoryRecord,
+  type PaginatedNodes,
+  type EventRecord,
+  type PaginatedEvents,
 } from './schemas'
 
-export type { Mode, DeviceStatus, NodeStatus, TerraNode, DeviceState, Device, Health, Override, CommandPayload, CommandResult, RawPinPayload }
+export type {
+  Mode,
+  DeviceStatus,
+  NodeStatus,
+  TerraNode,
+  DeviceState,
+  Device,
+  Health,
+  Override,
+  CommandPayload,
+  CommandResult,
+  RawPinPayload,
+  MeasurementRecord,
+  PaginatedMeasurements,
+  ActuatorHistoryRecord,
+  PaginatedActuators,
+  NodeHistoryRecord,
+  PaginatedNodes,
+  EventRecord,
+  PaginatedEvents,
+}
 
 export const apiFetch = async <T>(
   path: string,
@@ -69,6 +101,78 @@ export const fetchDevices = (signal?: AbortSignal) =>
 
 export const fetchOverrides = (signal?: AbortSignal) =>
   apiFetch<Override[]>('/overrides', z.array(OverrideSchema), { signal })
+
+/* History API Fetchers */
+
+export const fetchMeasurementsHistory = (
+  deviceId?: string,
+  limit = 50,
+  offset = 0,
+  signal?: AbortSignal
+) => {
+  const params = new URLSearchParams()
+  if (deviceId) params.append('device_id', deviceId)
+  params.append('limit', String(limit))
+  params.append('offset', String(offset))
+  return apiFetch<PaginatedMeasurements>(
+    `/history/measurements?${params.toString()}`,
+    PaginatedMeasurementsSchema,
+    { signal }
+  )
+}
+
+export const fetchActuatorsHistory = (
+  deviceId?: string,
+  source?: string,
+  limit = 50,
+  offset = 0,
+  signal?: AbortSignal
+) => {
+  const params = new URLSearchParams()
+  if (deviceId) params.append('device_id', deviceId)
+  if (source) params.append('source', source)
+  params.append('limit', String(limit))
+  params.append('offset', String(offset))
+  return apiFetch<PaginatedActuators>(
+    `/history/actuators?${params.toString()}`,
+    PaginatedActuatorsSchema,
+    { signal }
+  )
+}
+
+export const fetchNodesHistory = (
+  nodeId?: string,
+  limit = 50,
+  offset = 0,
+  signal?: AbortSignal
+) => {
+  const params = new URLSearchParams()
+  if (nodeId) params.append('node_id', nodeId)
+  params.append('limit', String(limit))
+  params.append('offset', String(offset))
+  return apiFetch<PaginatedNodes>(
+    `/history/nodes?${params.toString()}`,
+    PaginatedNodesSchema,
+    { signal }
+  )
+}
+
+export const fetchEventsHistory = (
+  topic?: string,
+  limit = 50,
+  offset = 0,
+  signal?: AbortSignal
+) => {
+  const params = new URLSearchParams()
+  if (topic) params.append('topic', topic)
+  params.append('limit', String(limit))
+  params.append('offset', String(offset))
+  return apiFetch<PaginatedEvents>(
+    `/history/events?${params.toString()}`,
+    PaginatedEventsSchema,
+    { signal }
+  )
+}
 
 export const deviceValue = (device: Device): string => {
   const state = device.current_state

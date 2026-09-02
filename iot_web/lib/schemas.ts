@@ -92,3 +92,77 @@ export const RawPinCommandSchema = z.object({
   value: z.number(),
 })
 export type RawPinPayload = z.infer<typeof RawPinCommandSchema>
+
+/* History Schemas */
+
+export const MeasurementRecordSchema = z.object({
+  id: z.number(),
+  timestamp: z.number(),
+  device_id: z.string(),
+  value: z.number().nullable().optional(),
+  unit: z.string().nullable().optional(),
+  status: z.string(),
+})
+export type MeasurementRecord = z.infer<typeof MeasurementRecordSchema>
+
+export const PaginatedMeasurementsSchema = z.object({
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+  data: z.array(MeasurementRecordSchema),
+})
+export type PaginatedMeasurements = z.infer<typeof PaginatedMeasurementsSchema>
+
+export const ActuatorHistoryRecordSchema = z.object({
+  id: z.number(),
+  timestamp: z.number(),
+  device_id: z.string(),
+  state: z.string(),
+  source: z.string().nullable().optional(),
+  user_id: z.string().nullable().optional(),
+})
+export type ActuatorHistoryRecord = z.infer<typeof ActuatorHistoryRecordSchema>
+
+export const PaginatedActuatorsSchema = z.object({
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+  data: z.array(ActuatorHistoryRecordSchema),
+})
+export type PaginatedActuators = z.infer<typeof PaginatedActuatorsSchema>
+
+export const NodeHistoryRecordSchema = z.object({
+  id: z.number(),
+  timestamp: z.number(),
+  node_id: z.string(),
+  host: z.string(),
+  port: z.number(),
+  driver: z.string(),
+  event: z.string(),
+})
+export type NodeHistoryRecord = z.infer<typeof NodeHistoryRecordSchema>
+
+export const PaginatedNodesSchema = z.object({
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+  data: z.array(NodeHistoryRecordSchema),
+})
+export type PaginatedNodes = z.infer<typeof PaginatedNodesSchema>
+
+export const EventRecordSchema = z.object({
+  id: z.number(),
+  timestamp: z.number(),
+  topic: z.string(),
+  sender: z.string(),
+  payload: z.string(),
+})
+export type EventRecord = z.infer<typeof EventRecordSchema>
+
+export const PaginatedEventsSchema = z.object({
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+  data: z.array(EventRecordSchema),
+})
+export type PaginatedEvents = z.infer<typeof PaginatedEventsSchema>

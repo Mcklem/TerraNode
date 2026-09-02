@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import devices, health, nodes, overrides
+from api.routes import devices, health, history, nodes, overrides
 
 
 tags_metadata = [
@@ -10,6 +10,14 @@ tags_metadata = [
             "Operaciones sobre **sensores y actuadores**. Permite consultar lecturas en tiempo real, "
             "estados de salud hardware, emitir **comandos de control manual** (`turn_on`, `turn_off`, `set_position`) "
             "y restablecer el control automático a las reglas del sistema (`AUTO`)."
+        ),
+    },
+    {
+        "name": "History",
+        "description": (
+            "Consulta de **registros históricos y auditoría** almacenados en la base de datos (telemetría de "
+            "sensores, comandos ejecutados en actuadores, conexiones de nodos y eventos del sistema) "
+            "con soporte completo para **paginación (`limit`, `offset`) y filtros**."
         ),
     },
     {
@@ -53,10 +61,8 @@ La API RESTful de TerraNode proporciona una interfaz desacoplada para el monitor
    - Al enviar un comando mediante `POST /api/v1/devices/{device_id}/command`, la orden se ejecuta de inmediato sobre el nodo físico y **fija el modo de override manual**.
    - Para devolver el dispositivo al control automático de reglas, se debe invocar `POST /api/v1/devices/{device_id}/restore-control`.
 
-3. **Catálogo de Comandos Frecuentes por Tipo de Actuador:**
-   - **Relés (`relay`):** `action: "turn_on"`, `action: "turn_off"`
-   - **Servomotores (`servo`):** `action: "set_position"`, `params: {"angle": 90}`
-   - **Comandos Crudos a Pines (`/api/v1/nodes/{node_id}/pin`):** `command_type: "digital_write"`, `pin: "D5"`, `value: 1`
+3. **Consultas Históricas Paginadas (`/api/v1/history`):**
+   - Todos los endpoints históricos aceptan `limit` (por defecto 50, máx 500) y `offset` (desplazamiento para paginación) junto a filtros por `device_id`, `node_id`, `source` o `topic`.
 """
 
 
@@ -85,6 +91,6 @@ def create_app() -> FastAPI:
     app.include_router(nodes.router)
     app.include_router(devices.router)
     app.include_router(overrides.router)
+    app.include_router(history.router)
 
     return app
-

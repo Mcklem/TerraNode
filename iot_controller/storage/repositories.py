@@ -4,16 +4,18 @@ import time
 from typing import Any, Dict, List, Optional
 from sqlalchemy import delete
 from core.event_bus import Event, EventBus
-from storage.database import ActuatorHistoryModel, Database, EventModel, MeasurementModel
+from core.node_manager import NodeManager
+from storage.database import ActuatorHistoryModel, Database, EventModel, MeasurementModel, NodeHistoryModel
 from utils.logging import get_logger
 
 
 class StorageManager:
-    """Subscribes to EventBus and manages queued persistent storage via SQLAlchemy ORM."""
+    """Subscribes to EventBus and manages queued persistent historical audit storage via SQLAlchemy ORM."""
 
-    def __init__(self, db: Database, event_bus: EventBus):
+    def __init__(self, db: Database, event_bus: EventBus, node_manager: Optional[NodeManager] = None):
         self.db = db
         self.event_bus = event_bus
+        self.node_manager = node_manager
         self._running: bool = False
         self._queue: asyncio.Queue = asyncio.Queue()
         self._writer_task: Optional[asyncio.Task] = None
@@ -25,16 +27,23 @@ class StorageManager:
             return
         self._running = True
         self._writer_task = asyncio.create_task(self._writer_loop())
+
         self.event_bus.subscribe("device.value_changed", self._on_measurement)
+        self.event_bus.subscribe("command.executed", self._on_command_executed)
+        self.event_bus.subscribe("node.status_changed", self._on_node_status_changed)
         self.event_bus.subscribe("*", self._on_any_event)
-        self._logger.info("StorageManager started with queued SQLAlchemy ORM persistence.")
+
+        self._logger.info("StorageManager started with queued historical SQLAlchemy ORM persistence.")
 
     def stop(self) -> None:
         """Stop subscriptions, drain write queue, and close database."""
         if not self._running:
             return
         self._running = False
+
         self.event_bus.unsubscribe("device.value_changed", self._on_measurement)
+        self.event_bus.unsubscribe("command.executed", self._on_command_executed)
+        self.event_bus.unsubscribe("node.status_changed", self._on_node_status_changed)
         self.event_bus.unsubscribe("*", self._on_any_event)
 
         if self._writer_task:
@@ -70,10 +79,50 @@ class StorageManager:
             )
             await self._queue.put(measurement)
 
+    async def _on_command_executed(self, event: Event) -> None:
+        """Queue actuator state change for batch storage in actuator_history table."""
+        payload = event.payload
+        device_id = payload.get("device_id", event.sender)
+        action = payload.get("action", payload.get("state", "UNKNOWN"))
+        source = payload.get("source", "SYSTEM")
+        user_id = payload.get("user_id") or source
+
+        act_history = ActuatorHistoryModel(
+            timestamp=event.timestamp,
+            device_id=device_id,
+            state=str(action),
+            source=str(source),
+            user_id=str(user_id),
+        )
+        await self._queue.put(act_history)
+
+    async def _on_node_status_changed(self, event: Event) -> None:
+        """Queue node connection event for batch storage in node_history table."""
+        node_id = event.sender
+        status_val = event.payload.get("status") or event.payload.get("event") or "UNKNOWN"
+        host, port, driver = "127.0.0.1", 3030, "unknown"
+
+        if self.node_manager:
+            node = self.node_manager.get_node(node_id)
+            if node:
+                host = node.host
+                port = node.port
+                driver = node.driver
+
+        node_hist = NodeHistoryModel(
+            timestamp=event.timestamp,
+            node_id=node_id,
+            host=host,
+            port=port,
+            driver=driver,
+            event=str(status_val),
+        )
+        await self._queue.put(node_hist)
+
     async def _on_any_event(self, event: Event) -> None:
-        """Queue event for batch storage in events table (skipping redundant device.value_changed)."""
-        if event.topic == "device.value_changed":
-            return  # Already handled in structured measurements table
+        """Queue event for batch storage in events table (skipping structured dedicated topics)."""
+        if event.topic in ("device.value_changed", "command.executed", "node.status_changed"):
+            return
 
         payload_str = json.dumps(event.payload, default=str)
         evt = EventModel(
@@ -134,12 +183,14 @@ class StorageManager:
                 self._logger.warning(f"Error flushing queue during shutdown: {e}")
 
     async def purge_old_data(self, retention_days: int = 30) -> int:
-        """Delete historical measurements and events older than retention_days using SQLAlchemy ORM."""
+        """Delete historical measurements, events, actuator logs, and node logs older than retention_days."""
         cutoff = time.time() - (retention_days * 86400)
 
         def _purge(session):
             session.execute(delete(MeasurementModel).where(MeasurementModel.timestamp < cutoff))
             session.execute(delete(EventModel).where(EventModel.timestamp < cutoff))
+            session.execute(delete(ActuatorHistoryModel).where(ActuatorHistoryModel.timestamp < cutoff))
+            session.execute(delete(NodeHistoryModel).where(NodeHistoryModel.timestamp < cutoff))
 
         await self.db.run_in_session(_purge)
         self._logger.info(f"Purged historical data older than {retention_days} days via SQLAlchemy ORM.")
