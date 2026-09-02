@@ -11,7 +11,7 @@
 #
 # 2. NODES SECTION:
 #    Each node key represents a NodeMCU ESP8266 board (e.g. weather_01).
-#    - driver: "firmata" (physical board over WiFi) or "mock" (simulation).
+#    - driver: "standard_firmata" (physical board over USB) or "standard_firmata_wifi" (physical board over WiFi) or "mock" (simulation).
 #    - host: IP address of the NodeMCU (e.g. 192.168.1.37).
 #    - port: Firmata TCP port (default: 3030).
 #    - enabled: Set true/false to enable or disable the node.
@@ -76,7 +76,7 @@ system:
 
 nodes:
   weather_01:
-    driver: firmata
+    driver: standard_firmata_wifi
     host: 192.168.1.37
     port: 3030
     enabled: true
