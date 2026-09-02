@@ -11,17 +11,50 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   return forward(request, (await params).path)
 }
 
-async function forward(request: NextRequest, path: string[]) {
-  if (!allowedMethods.has(request.method) || path.some((part) => part.includes('..'))) {
-    return NextResponse.json({ detail: 'Ruta no permitida' }, { status: 400 })
+async function forward(request: NextRequest, pathParts: string[]) {
+  if (!allowedMethods.has(request.method) || pathParts.some((part) => part.includes('..'))) {
+    return NextResponse.json({ detail: 'Ruta no permitida o método no soportado' }, { status: 400 })
   }
-  const target = new URL(`/api/v1/${path.map(encodeURIComponent).join('/')}`, baseUrl)
+
+  const pathStr = pathParts.map(encodeURIComponent).join('/')
+  const targetUrl = new URL(`/api/v1/${pathStr}`, baseUrl)
+
+  // Preservar parámetros de búsqueda de la URL original
+  request.nextUrl.searchParams.forEach((value, key) => {
+    targetUrl.searchParams.append(key, value)
+  })
+
   const body = request.method === 'POST' ? await request.text() : undefined
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 6000)
+
   try {
-    const response = await fetch(target, { method: request.method, headers: { Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) }, body, cache: 'no-store' })
-    const data = await response.json().catch(() => ({ detail: 'Respuesta inválida del controlador' }))
+    const response = await fetch(targetUrl.toString(), {
+      method: request.method,
+      headers: {
+        Accept: 'application/json',
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+      },
+      body,
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeoutId)
+
+    const data = await response.json().catch(() => ({ detail: 'Respuesta con formato no válido del controlador' }))
     return NextResponse.json(data, { status: response.status })
-  } catch {
-    return NextResponse.json({ detail: `No se pudo conectar con TerraNode en ${baseUrl}` }, { status: 503 })
+  } catch (error: any) {
+    clearTimeout(timeoutId)
+    const isTimeout = error?.name === 'AbortError'
+    return NextResponse.json(
+      {
+        detail: isTimeout
+          ? `Tiempo de espera agotado al conectar con TerraNode API en ${baseUrl}`
+          : `No se pudo conectar con el controlador TerraNode en ${baseUrl}`,
+      },
+      { status: 503 }
+    )
   }
 }

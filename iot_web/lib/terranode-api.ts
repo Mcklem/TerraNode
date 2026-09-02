@@ -1,26 +1,128 @@
-export type Mode = 'AUTO' | 'MANUAL_ON' | 'MANUAL_OFF' | 'MANUAL_VALUE'
-export type NodeStatus = 'CONNECTED' | 'DISCONNECTED' | 'RECONNECTING' | 'ERROR'
-export type DeviceStatus = 'OK' | 'ERROR' | 'DISCONNECTED'
+import { z } from 'zod'
+import {
+  Device,
+  DeviceSchema,
+  DeviceState,
+  Health,
+  HealthSchema,
+  NodeInfoSchema,
+  Override,
+  OverrideSchema,
+  TerraNode,
+  type Mode,
+  type DeviceStatus,
+  type NodeStatus,
+  type CommandPayload,
+  type CommandResult,
+  type RawPinPayload,
+} from './schemas'
 
-export type TerraNode = { id: string; connected: boolean; driver: string; host: string; port: number; enabled: boolean; status: NodeStatus }
-export type DeviceState = { device_id: string; state?: 'ON' | 'OFF'; raw_value?: number; moisture_percent?: number; angle?: number; timestamp?: number; status: DeviceStatus }
-export type Device = { id: string; type: string; node_id: string; status: DeviceStatus; control_mode: Mode; override_active: boolean; current_state: DeviceState }
-export type Health = { status: string; total_nodes: number; connected_nodes: number; total_devices: number; report?: { nodes: Record<string, unknown>; devices: Record<string, unknown> } }
-export type Override = { device_id: string; mode: Mode; last_action: string; override_source: string; set_at: number; expires_at: number | null }
+export type { Mode, DeviceStatus, NodeStatus, TerraNode, DeviceState, Device, Health, Override, CommandPayload, CommandResult, RawPinPayload }
 
-export const apiFetch = async <T>(path: string, init?: RequestInit): Promise<T> => {
-  const response = await fetch(`/api/terranode${path}`, { ...init, headers: { Accept: 'application/json', ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers } })
-  const body = await response.json().catch(() => ({ detail: 'Respuesta inválida del controlador' }))
-  if (!response.ok) throw new Error(body.detail || `Error del controlador (${response.status})`)
+export const apiFetch = async <T>(
+  path: string,
+  schema?: z.ZodType<T>,
+  init?: RequestInit
+): Promise<T> => {
+  const url = `/api/terranode${path}`
+  const response = await fetch(url, {
+    ...init,
+    headers: {
+      Accept: 'application/json',
+      ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+      ...init?.headers,
+    },
+  })
+
+  let body: any
+  try {
+    body = await response.json()
+  } catch {
+    body = { detail: `Respuesta no válida del controlador (${response.status})` }
+  }
+
+  if (!response.ok) {
+    const errorMsg = body?.detail || body?.message || `Error del controlador (${response.status})`
+    throw new Error(errorMsg)
+  }
+
+  if (schema) {
+    const parseResult = schema.safeParse(body)
+    if (!parseResult.success) {
+      console.warn(`[TerraNode API] Advertencia de validación de esquema en ${path}:`, parseResult.error.format())
+      return body as T
+    }
+    return parseResult.data
+  }
+
   return body as T
 }
 
-export const deviceValue = (device: Device) => {
+export const fetchHealth = (signal?: AbortSignal) =>
+  apiFetch<Health>('/health', HealthSchema, { signal })
+
+export const fetchNodes = (signal?: AbortSignal) =>
+  apiFetch<TerraNode[]>('/nodes', z.array(NodeInfoSchema), { signal })
+
+export const fetchDevices = (signal?: AbortSignal) =>
+  apiFetch<Device[]>('/devices', z.array(DeviceSchema), { signal })
+
+export const fetchOverrides = (signal?: AbortSignal) =>
+  apiFetch<Override[]>('/overrides', z.array(OverrideSchema), { signal })
+
+export const deviceValue = (device: Device): string => {
   const state = device.current_state
-  if (device.type === 'relay') return state.state ?? '—'
-  if (device.type === 'servo') return state.angle == null ? '—' : `${state.angle}°`
-  if (device.type === 'soil_moisture') return state.moisture_percent == null ? '—' : `${state.moisture_percent.toFixed(1)}%`
-  return state.raw_value == null ? '—' : String(state.raw_value)
+  if (device.type === 'relay') {
+    return state.state ?? '—'
+  }
+  if (device.type === 'servo') {
+    return state.angle == null ? '—' : `${state.angle}°`
+  }
+  if (device.type === 'soil_moisture') {
+    if (state.moisture_percent != null) return `${state.moisture_percent.toFixed(1)}%`
+    if (state.value != null) return `${state.value.toFixed(1)}%`
+    return '—'
+  }
+  if (device.type === 'bmp180') {
+    if (state.temperature != null) return `${state.temperature.toFixed(1)}°C`
+    if (state.value != null) return `${state.value.toFixed(1)}°C`
+    return '—'
+  }
+  if (device.type === 'ldr') {
+    const raw = state.raw_value ?? state.value
+    return raw == null ? '—' : `${raw} raw`
+  }
+  const genericVal = state.value ?? state.raw_value
+  return genericVal == null ? '—' : String(genericVal)
 }
 
-export const deviceAction = (device: Device) => device.type === 'relay' ? (device.current_state.state === 'ON' ? 'turn_off' : 'turn_on') : 'set_position'
+export const getDeviceMetrics = (device: Device): Array<{ label: string; value: string }> => {
+  const state = device.current_state
+  const metrics: Array<{ label: string; value: string }> = []
+
+  if (device.type === 'bmp180') {
+    if (state.pressure != null) {
+      metrics.push({ label: 'PRESIÓN', value: `${state.pressure.toFixed(1)} hPa` })
+    }
+    if (state.altitude != null) {
+      metrics.push({ label: 'ALTITUD', value: `${state.altitude.toFixed(0)} m` })
+    }
+  } else if (device.type === 'soil_moisture') {
+    if (state.raw_value != null) {
+      metrics.push({ label: 'RAW', value: String(state.raw_value) })
+    }
+  } else if (device.type === 'ldr') {
+    if (state.raw_value != null) {
+      metrics.push({ label: 'RAW ADC', value: String(state.raw_value) })
+    }
+  }
+
+  return metrics
+}
+
+export const deviceAction = (device: Device): string => {
+  if (device.type === 'relay') {
+    return device.current_state.state === 'ON' ? 'turn_off' : 'turn_on'
+  }
+  return 'set_position'
+}

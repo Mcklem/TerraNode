@@ -35,19 +35,23 @@ class ServoActuator(Actuator):
     async def stop(self) -> None:
         pass
 
-    async def set_position(self, target_angle: int) -> Dict[str, Any]:
+    async def set_position(self, target_angle: Optional[int] = None, angle: Optional[int] = None, **kwargs) -> Dict[str, Any]:
         if not self.node.is_connected():
             self.set_status(DeviceStatus.DISCONNECTED)
             return self.get_state()
 
-        angle = max(self.min_angle, min(self.max_angle, target_angle))
+        raw_angle = target_angle if target_angle is not None else angle
+        if raw_angle is None:
+            raw_angle = self.min_angle
+
+        angle_val = max(self.min_angle, min(self.max_angle, int(raw_angle)))
         try:
-            self.node.servo_write(self.pin, angle)
-            self._current_angle = angle
-            self._current_state = f"ANGLE_{angle}"
+            self.node.servo_write(self.pin, angle_val)
+            self._current_angle = angle_val
+            self._current_state = f"ANGLE_{angle_val}"
             self._last_timestamp = time.time()
             self.set_status(DeviceStatus.OK)
-            self._logger.info(f"Servo {self.id} -> {angle}°")
+            self._logger.info(f"Servo {self.id} -> {angle_val}°")
         except Exception as e:
             self.set_status(DeviceStatus.ERROR, error=f"Error setting Servo position: {e}")
 

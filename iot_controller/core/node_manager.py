@@ -37,7 +37,7 @@ class NodeManager:
             "timeout": timeout,
         }
 
-        if driver == "firmata":
+        if driver in ("standard_firmata", "standard_firmata_wifi"):
             node = FirmataNode(**kwargs)
         elif driver == "mock":
             node = MockNode(**kwargs)
