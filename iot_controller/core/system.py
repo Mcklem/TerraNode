@@ -42,6 +42,7 @@ class ControllerSystem:
         self.command_dispatcher: Optional[Any] = None
         self.live_command_service: Optional[Any] = None
         self.rule_engine: Optional[RuleEngine] = None
+        self.time_scheduler: Optional[Any] = None
         self.health_monitor: Optional[HealthMonitor] = None
         self.api_server: Optional[Any] = None
         self.api_task: Optional[asyncio.Task] = None
@@ -123,6 +124,17 @@ class ControllerSystem:
         )
         self.rule_engine.start()
 
+        # 12b. Start Time Scheduler
+        from automation.time_scheduler import TimeScheduler
+        schedules_cfg = self.config.get("schedules", {})
+        self.time_scheduler = TimeScheduler(
+            schedules_cfg,
+            self.device_manager,
+            self.event_bus,
+            self.command_dispatcher,
+        )
+        self.time_scheduler.start()
+
         # 13. Start Health Monitor
         self.health_monitor = HealthMonitor(self.node_manager, self.device_manager, self.event_bus)
         await self.health_monitor.start()
@@ -134,6 +146,7 @@ class ControllerSystem:
         system_container.health_monitor = self.health_monitor
         system_container.live_command_service = self.live_command_service
         system_container.override_registry = self.override_registry
+        system_container.time_scheduler = self.time_scheduler
         system_container.db = self.db
 
         # 13b. Start FastAPI Web Service if enabled in settings
@@ -185,6 +198,12 @@ class ControllerSystem:
                 self.rule_engine.stop()
             except Exception as e:
                 self.logger.warning(f"Error stopping RuleEngine: {e}")
+
+        if self.time_scheduler:
+            try:
+                self.time_scheduler.stop()
+            except Exception as e:
+                self.logger.warning(f"Error stopping TimeScheduler: {e}")
 
         if self.scheduler:
             try:

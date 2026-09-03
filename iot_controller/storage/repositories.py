@@ -5,7 +5,14 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy import delete
 from core.event_bus import Event, EventBus
 from core.node_manager import NodeManager
-from storage.database import ActuatorHistoryModel, Database, EventModel, MeasurementModel, NodeHistoryModel
+from storage.database import (
+    ActuatorHistoryModel,
+    Database,
+    EventModel,
+    MeasurementModel,
+    NodeHistoryModel,
+    ScheduleHistoryModel,
+)
 from utils.logging import get_logger
 
 
@@ -31,6 +38,8 @@ class StorageManager:
         self.event_bus.subscribe("device.value_changed", self._on_measurement)
         self.event_bus.subscribe("command.executed", self._on_command_executed)
         self.event_bus.subscribe("node.status_changed", self._on_node_status_changed)
+        self.event_bus.subscribe("schedule.triggered", self._on_schedule_event)
+        self.event_bus.subscribe("schedule.completed", self._on_schedule_event)
         self.event_bus.subscribe("*", self._on_any_event)
 
         self._logger.info("StorageManager started with queued historical SQLAlchemy ORM persistence.")
@@ -44,6 +53,8 @@ class StorageManager:
         self.event_bus.unsubscribe("device.value_changed", self._on_measurement)
         self.event_bus.unsubscribe("command.executed", self._on_command_executed)
         self.event_bus.unsubscribe("node.status_changed", self._on_node_status_changed)
+        self.event_bus.unsubscribe("schedule.triggered", self._on_schedule_event)
+        self.event_bus.unsubscribe("schedule.completed", self._on_schedule_event)
         self.event_bus.unsubscribe("*", self._on_any_event)
 
         if self._writer_task:
@@ -119,9 +130,36 @@ class StorageManager:
         )
         await self._queue.put(node_hist)
 
+    async def _on_schedule_event(self, event: Event) -> None:
+        """Queue schedule execution event for batch storage in schedule_history table."""
+        payload = event.payload
+        schedule_id = payload.get("schedule_id", event.sender)
+        device_id = payload.get("device_id", "unknown")
+        action = payload.get("action") or payload.get("stop_action") or "UNKNOWN"
+        event_type = "TRIGGERED" if event.topic == "schedule.triggered" else "COMPLETED"
+        duration = payload.get("duration")
+        status_str = payload.get("status", "SUCCESS" if payload.get("success", True) else "BLOCKED")
+
+        sched_hist = ScheduleHistoryModel(
+            timestamp=event.timestamp,
+            schedule_id=schedule_id,
+            device_id=device_id,
+            action=str(action),
+            event_type=event_type,
+            duration=float(duration) if duration is not None else None,
+            status=str(status_str),
+        )
+        await self._queue.put(sched_hist)
+
     async def _on_any_event(self, event: Event) -> None:
         """Queue event for batch storage in events table (skipping structured dedicated topics)."""
-        if event.topic in ("device.value_changed", "command.executed", "node.status_changed"):
+        if event.topic in (
+            "device.value_changed",
+            "command.executed",
+            "node.status_changed",
+            "schedule.triggered",
+            "schedule.completed",
+        ):
             return
 
         payload_str = json.dumps(event.payload, default=str)
@@ -183,7 +221,7 @@ class StorageManager:
                 self._logger.warning(f"Error flushing queue during shutdown: {e}")
 
     async def purge_old_data(self, retention_days: int = 30) -> int:
-        """Delete historical measurements, events, actuator logs, and node logs older than retention_days."""
+        """Delete historical measurements, events, actuator logs, node logs, and schedule logs older than retention_days."""
         cutoff = time.time() - (retention_days * 86400)
 
         def _purge(session):
@@ -191,6 +229,7 @@ class StorageManager:
             session.execute(delete(EventModel).where(EventModel.timestamp < cutoff))
             session.execute(delete(ActuatorHistoryModel).where(ActuatorHistoryModel.timestamp < cutoff))
             session.execute(delete(NodeHistoryModel).where(NodeHistoryModel.timestamp < cutoff))
+            session.execute(delete(ScheduleHistoryModel).where(ScheduleHistoryModel.timestamp < cutoff))
 
         await self.db.run_in_session(_purge)
         self._logger.info(f"Purged historical data older than {retention_days} days via SQLAlchemy ORM.")

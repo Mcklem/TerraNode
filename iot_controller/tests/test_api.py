@@ -10,7 +10,14 @@ from core.node_manager import NodeManager
 from core.pin_manager import PinManager
 from monitoring.health import HealthMonitor
 from services.live_command import CommandDispatcher, LiveCommandService, OverrideRegistry
-from storage.database import ActuatorHistoryModel, Database, EventModel, MeasurementModel, NodeHistoryModel
+from storage.database import (
+    ActuatorHistoryModel,
+    Database,
+    EventModel,
+    MeasurementModel,
+    NodeHistoryModel,
+    ScheduleHistoryModel,
+)
 
 
 class TestFastAPIWebService(unittest.IsolatedAsyncioTestCase):
@@ -168,6 +175,17 @@ class TestFastAPIWebService(unittest.IsolatedAsyncioTestCase):
             evt1 = EventModel(timestamp=60.0, topic="rule.triggered", sender="RuleEngine", payload="{}")
             session.add(evt1)
 
+            sch1 = ScheduleHistoryModel(
+                timestamp=70.0,
+                schedule_id="riego_matutino",
+                device_id="pump_01",
+                action="turn_on",
+                event_type="TRIGGERED",
+                duration=900.0,
+                status="SUCCESS",
+            )
+            session.add(sch1)
+
         await self.db.run_in_session(_seed)
 
         # 1. Test /api/v1/history/measurements with filter and pagination
@@ -193,7 +211,15 @@ class TestFastAPIWebService(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(data_n["total"], 1)
         self.assertEqual(data_n["data"][0]["event"], "CONNECTED")
 
-        # 4. Test /api/v1/history/events
+        # 4. Test /api/v1/history/schedules
+        resp_s = self.client.get("/api/v1/history/schedules?schedule_id=riego_matutino")
+        self.assertEqual(resp_s.status_code, 200)
+        data_s = resp_s.json()
+        self.assertEqual(data_s["total"], 1)
+        self.assertEqual(data_s["data"][0]["schedule_id"], "riego_matutino")
+        self.assertEqual(data_s["data"][0]["duration"], 900.0)
+
+        # 5. Test /api/v1/history/events
         resp_e = self.client.get("/api/v1/history/events?topic=rule.triggered")
         self.assertEqual(resp_e.status_code, 200)
         data_e = resp_e.json()

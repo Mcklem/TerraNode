@@ -126,3 +126,21 @@ class ConfigLoader:
                     raise ConfigurationError(
                         f"Rule '{rule_id}' action references non-existent device '{action_dev}'."
                     )
+
+        # Validate schedules section if present
+        schedules = self.raw_config.get("schedules", {})
+        if not isinstance(schedules, dict):
+            raise ConfigurationError("'schedules' section must be a dictionary.")
+
+        for sched_id, sched_cfg in schedules.items():
+            if not isinstance(sched_cfg, dict):
+                raise ConfigurationError(f"Schedule '{sched_id}' configuration must be a dictionary.")
+            target_dev = sched_cfg.get("device")
+            if not target_dev or target_dev not in devices:
+                raise ConfigurationError(
+                    f"Schedule '{sched_id}' references non-existent device '{target_dev}'."
+                )
+            if not sched_cfg.get("command"):
+                raise ConfigurationError(
+                    f"Schedule '{sched_id}' missing required field 'command'."
+                )

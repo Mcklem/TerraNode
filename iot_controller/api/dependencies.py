@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 from core.device_manager import DeviceManager
 from core.node_manager import NodeManager
 from monitoring.health import HealthMonitor
@@ -15,6 +15,7 @@ class SystemContainer:
         self.health_monitor: Optional[HealthMonitor] = None
         self.live_command_service: Optional[LiveCommandService] = None
         self.override_registry: Optional[OverrideRegistry] = None
+        self.time_scheduler: Optional[Any] = None
         self.db: Optional[Database] = None
 
 
@@ -47,6 +48,12 @@ def get_override_registry() -> OverrideRegistry:
     if system_container.override_registry is None:
         raise RuntimeError("OverrideRegistry is not initialized in API container")
     return system_container.override_registry
+
+
+def get_time_scheduler() -> Any:
+    if system_container.time_scheduler is None:
+        raise RuntimeError("TimeScheduler is not initialized in API container")
+    return system_container.time_scheduler
 
 
 def get_database() -> Database:
