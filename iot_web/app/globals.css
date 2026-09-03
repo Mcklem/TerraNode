@@ -352,21 +352,51 @@ button {
   border: 1px solid var(--border);
   background: transparent;
   color: var(--muted-foreground);
-  padding: 9px 12px;
+  padding: 8px 12px;
   font-size: 12px;
+  font-family: var(--font-mono);
+  border-radius: 4px;
+  transition: all 0.15s ease-in-out;
 }
 
-.quiet-button:hover,
-.pin-button:hover,
-.restore-button:hover {
+.quiet-button:focus-visible,
+.danger-button:focus-visible,
+.pin-button:focus-visible,
+.restore-button:focus-visible,
+.apply-button:focus-visible,
+.send-button:focus-visible,
+.filter:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--accent);
+}
+
+.quiet-button:hover:not(:disabled),
+.pin-button:hover:not(:disabled),
+.restore-button:hover:not(:disabled) {
   color: var(--foreground);
-  border-color: #55747a;
+  border-color: var(--accent);
+  background: rgba(84, 213, 237, 0.08);
+}
+
+.quiet-button:disabled,
+.danger-button:disabled,
+.pin-button:disabled,
+.restore-button:disabled,
+.apply-button:disabled,
+.send-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .danger-button {
   color: #f9bb57;
   border-color: #60491f;
   background: #211a10;
+}
+
+.danger-button:hover:not(:disabled) {
+  background: #332617;
+  border-color: #f9bb57;
 }
 
 .filter-row {
@@ -474,6 +504,28 @@ button {
 
 .device-card.is-override {
   border-color: #60491f;
+}
+
+.node-card.is-disconnected {
+  border-color: rgba(255, 128, 107, 0.45);
+  background: linear-gradient(135deg, rgba(28, 12, 12, 0.85), rgba(14, 7, 7, 0.85));
+}
+
+.device-card.is-disconnected {
+  opacity: 0.65;
+  filter: grayscale(70%) brightness(0.85);
+  border-color: rgba(255, 128, 107, 0.4);
+  background: linear-gradient(135deg, rgba(28, 12, 12, 0.7), rgba(14, 7, 7, 0.7));
+}
+
+.device-card.is-disconnected * {
+  cursor: not-allowed !important;
+}
+
+.device-card.is-disconnected button,
+.device-card.is-disconnected input,
+.device-card.is-disconnected select {
+  pointer-events: none !important;
 }
 
 .device-top {
@@ -639,10 +691,33 @@ button {
   font: 24px var(--font-mono);
 }
 
-.servo-control input {
+.servo-control input[type='range'] {
   width: 100%;
+  height: 6px;
+  background: #12282e;
+  border-radius: 3px;
+  outline: none;
   accent-color: #f9bb57;
   margin: 14px 0 7px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.servo-control input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #f9bb57;
+  box-shadow: 0 0 10px rgba(249, 187, 87, 0.5);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.servo-control input[type='range']::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 14px rgba(249, 187, 87, 0.85);
 }
 
 .range-labels {
@@ -652,9 +727,24 @@ button {
 }
 
 .apply-button {
+  width: 100%;
+  justify-content: center;
   color: #f9bb57;
   border-color: #60491f;
+  background: #251d12;
   margin-top: 14px;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  transition: all 0.15s ease-in-out;
+}
+
+.apply-button:hover:not(:disabled) {
+  background: #382a17;
+  border-color: #f9bb57;
+  box-shadow: 0 0 12px rgba(249, 187, 87, 0.25);
 }
 
 .restore-link {
@@ -684,6 +774,23 @@ button {
   width: 5px;
   height: 5px;
   margin-right: 5px;
+}
+
+.connected-dot.disconnected {
+  color: var(--destructive);
+  font-weight: 700;
+}
+
+.connected-dot.disconnected:before {
+  background: var(--destructive);
+  box-shadow: 0 0 8px var(--destructive);
+}
+
+.mode.disconnected {
+  color: var(--destructive);
+  border-color: rgba(255, 128, 107, 0.4);
+  background: rgba(255, 128, 107, 0.12);
+  font-weight: 700;
 }
 
 .override-list {

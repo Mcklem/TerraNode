@@ -18,7 +18,7 @@ import {
   type TerraNode,
 } from '@/lib/terranode-api'
 
-export function useTerraNode(pollIntervalMs = 4000) {
+export function useTerraNode(pollIntervalMs = 2000) {
   const [health, setHealth] = useState<Health | null>(null)
   const [nodes, setNodes] = useState<TerraNode[]>([])
   const [devices, setDevices] = useState<Device[]>([])
@@ -126,16 +126,38 @@ export function useTerraNode(pollIntervalMs = 4000) {
     ttlSeconds: number | null = 300
   ) => {
     setBusyId(device.id)
-    try {
-      const computedTargetMode =
-        targetMode ||
-        (device.type === 'relay'
-          ? action === 'turn_on'
-            ? 'MANUAL_ON'
-            : 'MANUAL_OFF'
-          : 'MANUAL_VALUE')
 
-      await apiFetch(`/devices/${encodeURIComponent(device.id)}/command`, undefined, {
+    const computedTargetMode =
+      targetMode ||
+      (device.type === 'relay'
+        ? action === 'turn_on'
+          ? 'MANUAL_ON'
+          : 'MANUAL_OFF'
+        : 'MANUAL_VALUE')
+
+    // 1. Instant Optimistic Local UI Update (0ms latency for button state)
+    setDevices((prev) =>
+      prev.map((d) => {
+        if (d.id === device.id) {
+          const nextState = { ...d.current_state }
+          if (action === 'turn_on') nextState.state = 'ON'
+          if (action === 'turn_off') nextState.state = 'OFF'
+          if (action === 'set_position' && typeof params.angle === 'number') {
+            nextState.angle = params.angle
+          }
+          return {
+            ...d,
+            control_mode: computedTargetMode as Mode,
+            override_active: true,
+            current_state: nextState,
+          }
+        }
+        return d
+      })
+    )
+
+    try {
+      const res = await apiFetch<any>(`/devices/${encodeURIComponent(device.id)}/command`, undefined, {
         method: 'POST',
         body: JSON.stringify({
           action,
@@ -146,10 +168,30 @@ export function useTerraNode(pollIntervalMs = 4000) {
         }),
       })
 
+      // 2. Authoritative update from server response payload
+      if (res && res.state_payload) {
+        setDevices((prev) =>
+          prev.map((d) => {
+            if (d.id === device.id) {
+              return {
+                ...d,
+                control_mode: (res.current_mode || computedTargetMode) as Mode,
+                override_active: true,
+                current_state: res.state_payload,
+              }
+            }
+            return d
+          })
+        )
+      }
+
       notify(`Comando '${action}' aplicado a ${device.id}`)
-      await refresh()
+      // 3. Trigger non-blocking background refresh to sync other components
+      refresh()
     } catch (e: any) {
       notify(e instanceof Error ? e.message : 'Error al enviar el comando al dispositivo')
+      // Rollback on error
+      refresh()
     } finally {
       setBusyId('')
     }
@@ -157,14 +199,47 @@ export function useTerraNode(pollIntervalMs = 4000) {
 
   const restoreDeviceControl = async (deviceId: string) => {
     setBusyId(deviceId)
+
+    // Instant Optimistic UI Update
+    setDevices((prev) =>
+      prev.map((d) => {
+        if (d.id === deviceId) {
+          return {
+            ...d,
+            control_mode: 'AUTO' as Mode,
+            override_active: false,
+          }
+        }
+        return d
+      })
+    )
+
     try {
-      await apiFetch(`/devices/${encodeURIComponent(deviceId)}/restore-control`, undefined, {
+      const res = await apiFetch<any>(`/devices/${encodeURIComponent(deviceId)}/restore-control`, undefined, {
         method: 'POST',
       })
+
+      if (res && res.state_payload) {
+        setDevices((prev) =>
+          prev.map((d) => {
+            if (d.id === deviceId) {
+              return {
+                ...d,
+                control_mode: 'AUTO' as Mode,
+                override_active: false,
+                current_state: res.state_payload,
+              }
+            }
+            return d
+          })
+        )
+      }
+
       notify(`Control automático (AUTO) restaurado para ${deviceId}`)
-      await refresh()
+      refresh()
     } catch (e: any) {
       notify(e instanceof Error ? e.message : 'Error al restaurar el control')
+      refresh()
     } finally {
       setBusyId('')
     }
@@ -175,7 +250,7 @@ export function useTerraNode(pollIntervalMs = 4000) {
     try {
       const res = await triggerSchedule(scheduleId)
       notify(res.message || `Tarea programada '${scheduleId}' disparada manualmente`)
-      await refresh()
+      refresh()
     } catch (e: any) {
       notify(e instanceof Error ? e.message : 'Error al disparar la tarea programada')
     } finally {
@@ -188,7 +263,7 @@ export function useTerraNode(pollIntervalMs = 4000) {
     try {
       const res = await toggleSchedule(scheduleId)
       notify(res.message || `Estado de '${scheduleId}' actualizado`)
-      await refresh()
+      refresh()
     } catch (e: any) {
       notify(e instanceof Error ? e.message : 'Error al alternar la tarea programada')
     } finally {
@@ -209,7 +284,7 @@ export function useTerraNode(pollIntervalMs = 4000) {
         body: JSON.stringify({ command_type: commandType, pin, value }),
       })
       notify(`Comando de Pin (${pin} = ${value}) enviado a nodo ${nodeId}`)
-      await refresh()
+      refresh()
     } catch (e: any) {
       notify(e instanceof Error ? e.message : 'Fallo en la ejecución de pin crudo')
     } finally {
@@ -223,7 +298,7 @@ export function useTerraNode(pollIntervalMs = 4000) {
     try {
       await Promise.all(overrides.map((o) => restoreDeviceControl(o.device_id)))
       notify('Todos los dispositivos fueron restaurados al modo AUTO')
-      await refresh()
+      refresh()
     } catch (e: any) {
       notify(e instanceof Error ? e.message : 'Error al restaurar overrides')
     } finally {

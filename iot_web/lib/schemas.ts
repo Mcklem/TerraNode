@@ -21,17 +21,17 @@ export const NodeInfoSchema = z.object({
 export type TerraNode = z.infer<typeof NodeInfoSchema>
 
 export const DeviceStateSchema = z.object({
-  device_id: z.string().optional(),
-  state: z.string().optional(),
-  raw_value: z.number().optional(),
-  value: z.number().optional(),
-  moisture_percent: z.number().optional(),
-  temperature: z.number().optional(),
-  pressure: z.number().optional(),
-  altitude: z.number().optional(),
-  angle: z.number().optional(),
-  timestamp: z.number().optional(),
-  status: z.string().optional(),
+  device_id: z.string().nullable().optional(),
+  state: z.string().nullable().optional(),
+  raw_value: z.number().nullable().optional(),
+  value: z.number().nullable().optional(),
+  moisture_percent: z.number().nullable().optional(),
+  temperature: z.number().nullable().optional(),
+  pressure: z.number().nullable().optional(),
+  altitude: z.number().nullable().optional(),
+  angle: z.number().nullable().optional(),
+  timestamp: z.number().nullable().optional(),
+  status: z.string().nullable().optional(),
 }).passthrough()
 export type DeviceState = z.infer<typeof DeviceStateSchema>
 

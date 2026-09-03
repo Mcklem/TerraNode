@@ -117,13 +117,15 @@ class PaginatedSchedulesHistoryResponse(BaseModel):
 )
 async def get_measurements_history(
     device_id: Optional[str] = Query(None, description="Filtrar por ID específico de sensor (ej. 'ldr_01')"),
+    order: str = Query("desc", description="Orden de clasificación por fecha ('desc' o 'asc')"),
     limit: int = Query(50, ge=1, le=500, description="Cantidad máxima de registros a retornar"),
     offset: int = Query(0, ge=0, description="Número de registros a omitir para paginación"),
     db: Database = Depends(get_database),
 ):
     def _query(session):
         stmt_count = select(func.count(MeasurementModel.id))
-        stmt_data = select(MeasurementModel).order_by(MeasurementModel.timestamp.desc())
+        order_clause = MeasurementModel.timestamp.asc() if order == "asc" else MeasurementModel.timestamp.desc()
+        stmt_data = select(MeasurementModel).order_by(order_clause)
 
         if device_id:
             stmt_count = stmt_count.where(MeasurementModel.device_id == device_id)

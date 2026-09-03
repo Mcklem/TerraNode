@@ -122,4 +122,13 @@ def create_app() -> FastAPI:
     app.include_router(history.router)
     app.include_router(schedules.router)
 
+    from fastapi.responses import JSONResponse
+
+    @app.exception_handler(ValueError)
+    async def value_error_handler(request, exc: ValueError):
+        return JSONResponse(
+            status_code=422,
+            content={"detail": str(exc)},
+        )
+
     return app

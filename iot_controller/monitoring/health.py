@@ -16,7 +16,7 @@ class HealthMonitor:
         node_manager: NodeManager,
         device_manager: DeviceManager,
         event_bus: EventBus,
-        check_interval: int = 15,
+        check_interval: int = 5,
     ):
         self.node_manager = node_manager
         self.device_manager = device_manager
@@ -65,6 +65,15 @@ class HealthMonitor:
         for node in nodes:
             if not node.enabled:
                 continue
+
+            if node.is_connected():
+                was_alive = await node.probe_connection()
+                if not was_alive:
+                    await self.event_bus.publish(
+                        topic="node.status_changed",
+                        sender=node.id,
+                        payload={"status": NodeStatus.DISCONNECTED.value, "reason": "Active probe failed"},
+                    )
 
             if not node.is_connected() and node.status != NodeStatus.RECONNECTING and node.id not in self._reconnecting_nodes:
                 self._logger.warning(
