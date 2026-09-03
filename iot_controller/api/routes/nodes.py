@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Any, Dict, List
 from pydantic import BaseModel, Field, ConfigDict
-from api.dependencies import get_node_manager, get_live_command_service
+from api.dependencies import get_node_manager, get_live_command_service, get_pin_manager
 from core.node_manager import NodeManager
+from core.pin_manager import PinManager
 from services.live_command import LiveCommandService
 
 router = APIRouter(prefix="/api/v1/nodes", tags=["Nodes"])
@@ -132,7 +133,15 @@ async def execute_raw_pin_command(
     node_id: str,
     body: RawPinCommand,
     live_service: LiveCommandService = Depends(get_live_command_service),
+    pin_mgr: Optional[PinManager] = Depends(get_pin_manager),
 ):
+    if pin_mgr:
+        allocated_dev = pin_mgr.get_allocated_device(node_id, body.pin)
+        if allocated_dev:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Pin '{body.pin}' on node '{node_id}' is reserved by active device '{allocated_dev}'",
+            )
     try:
         res = await live_service.execute_raw_node_command(
             node_id=node_id,
@@ -145,3 +154,4 @@ async def execute_raw_pin_command(
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed raw pin execution: {e}")
+

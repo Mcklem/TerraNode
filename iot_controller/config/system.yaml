@@ -1,70 +1,92 @@
 # ==============================================================================
-# SYSTEM CONFIGURATION TEMPLATE & REFERENCE GUIDE
+# TERRANODE IOT CONTROLLER - SYSTEM CONFIGURATION REFERENCE & TEMPLATE
 # ==============================================================================
+# This configuration defines the nodes, devices, automation rules, and time
+# schedules for the TerraNode controller installation.
 #
+# ------------------------------------------------------------------------------
 # 1. SYSTEM SECTION:
-#    name: Name of the controller system/installation.
-#    version: Version identifier.
-#    database: SQLite database file or connection string (default: controller.db).
-#    log_readings: Set true/false to log sensor measurements in real-time.
-#    log_rule_evaluations: Set true/false to log rule condition evaluations.
+#    name: Unique installation name (e.g. "parcela_controller").
+#    version: System version string (e.g. "1.0").
+#    database: SQLite DB filepath or connection URI (default: "controller.db").
+#    log_readings: True/False to enable sensor telemetry logs in console.
+#    log_rule_evaluations: True/False to enable automation rule evaluation logs.
 #
+# ------------------------------------------------------------------------------
 # 2. NODES SECTION:
-#    Each node key represents a NodeMCU ESP8266 board (e.g. weather_01).
-#    - driver: "firmata" (physical board over WiFi) or "mock" (simulation).
-#    - host: IP address of the NodeMCU (e.g. 192.168.1.37).
-#    - port: Firmata TCP port (default: 3030).
-#    - enabled: Set true/false to enable or disable the node.
-#    - arduino_wait: Seconds to wait for Firmata firmware response (default: 5).
+#    Each key represents a NodeMCU ESP8266 or Mock hardware node.
+#    - driver: "firmata" / "standard_firmata_wifi" (physical ESP8266 WiFi) or "mock" (simulation).
+#    - host: IP address of the NodeMCU board (e.g. 192.168.1.37).
+#    - port: TCP socket port (default: 3030).
+#    - enabled: True/False to activate or bypass the node.
+#    - arduino_wait: Seconds to wait for Firmata query handshake (default: 5).
 #    - max_retries: Connection retries on startup (default: 3).
 #    - timeout: Connection timeout per attempt in seconds (default: 12).
 #
-# 3. DEVICES SECTION (SUPPORTED DEVICE TYPES):
+# ------------------------------------------------------------------------------
+# 3. DEVICES SECTION:
 #    Devices are defined inside their parent node under the 'devices:' block.
 #
 #    - LDR Light Sensor:
 #        type: ldr
-#        pin: A0                   # Analog pin (e.g. A0)
+#        pin: A0                   # Analog input pin
 #        poll_interval: 10         # Polling interval in seconds
 #
 #    - BMP180 Temperature & Pressure Sensor (I2C):
 #        type: bmp180
-#        bus: i2c                  # Bus type
-#        address: 0x77             # I2C hexadecimal address (e.g. 0x77) This address must be unique by node, all I2C will share SCL and SDA pins (SCL → D1) (SDA → D2)
+#        bus: i2c                  # Shared I2C bus (SCL -> D1, SDA -> D2)
+#        address: 0x77             # Hexadecimal I2C address
 #        poll_interval: 60         # Polling interval in seconds
 #
 #    - Soil Moisture Sensor:
 #        type: soil_moisture
 #        pin: A0                   # Analog pin
 #        poll_interval: 300        # Polling interval in seconds
-#        calibration:              # Raw analog mapping (dry -> 0%, wet -> 100%)
+#        calibration:              # Calibration mapping (dry -> 0%, wet -> 100%)
 #          dry: 900
 #          wet: 350
 #
-#    - Relay Actuator:
+#    - Relay Actuator (Water pumps, lights, valves):
 #        type: relay
 #        pin: D5                   # Digital GPIO pin (e.g. D5, D6)
-#        active_low: true          # Set true for active-low relay modules
+#        active_low: true          # Set true for active-low relay boards
 #
-#    - Servo Actuator:
+#    - Servo Actuator (Window vents, dampers):
 #        type: servo
-#        pin: D7                   # Digital PWM pin (e.g. D7)
+#        pin: D7                   # Digital PWM pin
 #        min_angle: 0              # Min angle in degrees (0-180)
 #        max_angle: 180            # Max angle in degrees (0-180)
 #
-# 4. RULES SECTION:
-#    Declarative automation rules evaluating sensor conditions.
-#    - enabled: Set true/false to enable the rule.
+# ------------------------------------------------------------------------------
+# 4. RULES SECTION (SENSOR-DRIVEN AUTOMATION):
+#    Declarative rules evaluating sensor thresholds.
+#    - enabled: True/False
 #    - condition:
-#        device: Target sensor ID (e.g. light_01, soil_01, environment_01)
+#        device: Target sensor ID (e.g. soil_01, light_01)
 #        property: Property to evaluate ("value", "temperature", "pressure", "humidity")
 #        operator: Comparison operator ("<", ">", "<=", ">=", "==", "!=")
-#        value: Numeric threshold to compare against
+#        value: Numeric threshold
 #    - actions:
-#        List of target actuator commands:
-#        - device: Target actuator ID (e.g. vent_servo, irrigation_pump)
-#          command: Method to execute ("turn_on", "turn_off", "set_position")
-#          args: Arguments dict (e.g. { target_angle: 180 } for servo)
+#        List of target actuator commands to execute when condition is met.
+#        - device: Target actuator ID
+#          command: "turn_on" / "turn_off" / "set_position"
+#          args: Arguments dict (e.g. { target_angle: 180 })
+#
+# ------------------------------------------------------------------------------
+# 5. SCHEDULES SECTION (TIME & CALENDAR AUTOMATION):
+#    Time-based, recurring interval, duration, and calendar schedules.
+#    - enabled: True/False
+#    - device: Target actuator ID
+#    - command: Action to trigger (e.g. "turn_on", "set_position")
+#    - args: Optional start command parameters
+#    - stop_command: Action to execute when duration timer expires (e.g. "turn_off")
+#    - stop_args: Optional stop command parameters
+#    - duration: Active duration in seconds (e.g. 900 for 15 minutes)
+#    - interval: Interval periodicity in seconds (e.g. 7200 for 2 hours)
+#    - run_on_start: True/False - If true, triggers immediately on startup, then every interval.
+#    - time: Fixed daily time "HH:MM" (e.g. "08:00")
+#    - days: List of active days (e.g. ["mon", "tue", "wed", "thu", "fri", "sat", "sun"])
+#    - cron: 5-field cron pattern (e.g. "0 22 * * 1,3,5" for Mon, Wed, Fri at 22:00)
 # ==============================================================================
 
 system:
@@ -75,8 +97,25 @@ system:
   log_rule_evaluations: true
 
 nodes:
+  soil_01:
+    driver: standard_firmata_wifi
+    host: 192.168.1.107
+    port: 3030
+    enabled: true
+    arduino_wait: 5
+    max_retries: 3
+    timeout: 12
+    devices:
+      soil_moisture_01:
+        type: soil_moisture
+        pin: A0                   # Analog pin
+        poll_interval: 30        # Polling interval in seconds
+        calibration:              # Calibration mapping (dry -> 0%, wet -> 100%)
+          dry: 900
+          wet: 350
+
   weather_01:
-    driver: firmata
+    driver: standard_firmata_wifi
     host: 192.168.1.37
     port: 3030
     enabled: true
@@ -154,3 +193,32 @@ rules:
         command: set_position
         args:
           target_angle: 0
+
+schedules:
+  riego_matutino_diario:
+    enabled: true
+    device: irrigation_pump
+    command: turn_on
+    stop_command: turn_off
+    time: "08:00"
+    duration: 900                 # Riego activo durante 15 minutos (900s)
+    days: ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+
+  ciclo_ventilacion_periodica:
+    enabled: true
+    device: vent_servo
+    command: set_position
+    args: { target_angle: 180 }
+    stop_command: set_position
+    stop_args: { target_angle: 0 }
+    interval: 7200                # Ejecutar cada 2 horas (7200s)
+    duration: 600                 # Abrir durante 10 minutos (600s)
+    run_on_start: true           # Disparar al arrancar la app y luego cada 2 horas
+
+  riego_nocturno_cron:
+    enabled: true
+    device: irrigation_pump
+    command: turn_on
+    stop_command: turn_off
+    cron: "0 22 * * 1,3,5"       # Ejecución por patrón Cron: Lunes, Miércoles y Viernes a las 22:00
+    duration: 300                 # Riego activo durante 5 minutos (300s)

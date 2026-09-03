@@ -2,7 +2,7 @@ import asyncio
 import os
 import time
 from typing import Any, Dict, List, Optional
-from sqlalchemy import Float, Integer, String, Text, create_engine, select
+from sqlalchemy import Float, Index, Integer, String, Text, create_engine, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker, Session
 from core.settings import settings
 from utils.logging import get_logger
@@ -13,30 +13,28 @@ class Base(DeclarativeBase):
     pass
 
 
-class NodeModel(Base):
-    __tablename__ = "nodes"
+class NodeHistoryModel(Base):
+    """Historical append-only record of node connectivity events and IP details."""
+    __tablename__ = "node_history"
+    __table_args__ = (
+        Index("idx_node_hist_node_ts", "node_id", "timestamp"),
+    )
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    driver: Mapped[str] = mapped_column(String(32), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[float] = mapped_column(Float, nullable=False, index=True)
+    node_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     host: Mapped[str] = mapped_column(String(128), nullable=False)
     port: Mapped[int] = mapped_column(Integer, nullable=False)
-    status: Mapped[str] = mapped_column(String(32), nullable=False)
-    last_seen: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    updated_at: Mapped[float] = mapped_column(Float, nullable=False, default=time.time)
-
-
-class DeviceModel(Base):
-    __tablename__ = "devices"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    type: Mapped[str] = mapped_column(String(32), nullable=False)
-    node_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    status: Mapped[str] = mapped_column(String(32), nullable=False)
-    updated_at: Mapped[float] = mapped_column(Float, nullable=False, default=time.time)
+    driver: Mapped[str] = mapped_column(String(32), nullable=False)
+    event: Mapped[str] = mapped_column(String(32), nullable=False)
 
 
 class MeasurementModel(Base):
+    """Historical telemetry series of sensor measurements."""
     __tablename__ = "measurements"
+    __table_args__ = (
+        Index("idx_meas_dev_ts", "device_id", "timestamp"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[float] = mapped_column(Float, nullable=False, index=True)
@@ -47,7 +45,11 @@ class MeasurementModel(Base):
 
 
 class EventModel(Base):
+    """Historical event stream audit log of system events."""
     __tablename__ = "events"
+    __table_args__ = (
+        Index("idx_evt_topic_ts", "topic", "timestamp"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[float] = mapped_column(Float, nullable=False, index=True)
@@ -57,12 +59,37 @@ class EventModel(Base):
 
 
 class ActuatorHistoryModel(Base):
+    """Historical record of actuator state changes and commands."""
     __tablename__ = "actuator_history"
+    __table_args__ = (
+        Index("idx_act_dev_ts", "device_id", "timestamp"),
+        Index("idx_act_src_ts", "source", "timestamp"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[float] = mapped_column(Float, nullable=False, index=True)
     device_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     state: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+
+
+class ScheduleHistoryModel(Base):
+    """Historical record of time scheduler executions, durations, and completions."""
+    __tablename__ = "schedule_history"
+    __table_args__ = (
+        Index("idx_sched_sched_ts", "schedule_id", "timestamp"),
+        Index("idx_sched_dev_ts", "device_id", "timestamp"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[float] = mapped_column(Float, nullable=False, index=True)
+    schedule_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    device_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)  # TRIGGERED, COMPLETED, BLOCKED
+    duration: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)       # SUCCESS, BLOCKED, FAILED
 
 
 class Database:
@@ -104,6 +131,15 @@ class Database:
 
         def _create_tables():
             Base.metadata.create_all(self.engine)
+            if self.database_url.startswith("sqlite"):
+                try:
+                    with self.engine.connect() as conn:
+                        conn.execute(text("PRAGMA journal_mode=WAL;"))
+                        conn.execute(text("PRAGMA synchronous=NORMAL;"))
+                        conn.execute(text("PRAGMA busy_timeout=10000;"))
+                        conn.commit()
+                except Exception as e:
+                    self._logger.warning(f"Could not apply SQLite WAL pragmas: {e}")
 
         loop = asyncio.get_running_loop()
         await loop.run_in_executor(None, _create_tables)

@@ -78,3 +78,14 @@ class PinManager:
             if node_id:
                 self.register_device_pins(dev_id, node_id, dev_cfg)
         self._logger.info("Pin & I2C allocation validation passed without conflicts.")
+
+    def get_allocated_device(self, node_id: str, raw_pin: str) -> Optional[str]:
+        """Return the device_id currently bound to a raw pin on a node, if any."""
+        if node_id not in self._allocated_pins:
+            return None
+        try:
+            pin_num = parse_pin(raw_pin)
+            return self._allocated_pins[node_id].get(pin_num)
+        except ValueError:
+            return None
+

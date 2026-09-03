@@ -75,6 +75,15 @@ class LiveCommandService:
             state_payload=payload,
         )
 
+    async def restore_all_controls(self) -> List[CommandExecutionResult]:
+        """Restore control of all devices currently under manual override back to AUTO mode."""
+        active = self.override_registry.get_all_overrides()
+        results = []
+        for st in active:
+            res = await self.restore_control(st.device_id)
+            results.append(res)
+        return results
+
     def get_control_state(self, device_id: str) -> DeviceControlState:
         """Fetch current control state and mode for a device."""
         return self.override_registry.get_state(device_id)

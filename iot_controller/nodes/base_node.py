@@ -77,6 +77,10 @@ class BaseNode(ABC):
     def is_connected(self) -> bool:
         return self._status == NodeStatus.CONNECTED
 
+    async def probe_connection(self) -> bool:
+        """Probe whether the underlying physical/socket connection is alive."""
+        return self.is_connected()
+
     def health(self) -> Dict[str, Any]:
         """Return standardized node health metrics."""
         return {

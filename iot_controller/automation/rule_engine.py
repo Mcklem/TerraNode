@@ -51,6 +51,41 @@ class RuleEngine:
         self.event_bus.unsubscribe("device.control_restored", self._on_device_control_restored)
         self._logger.info("RuleEngine stopped.")
 
+    def get_rule_states(self) -> list:
+        """Return real-time state and configuration for all configured rules."""
+        states = []
+        for rule_id, cfg in self.rules_config.items():
+            cond = cfg.get("condition", {})
+            actions = cfg.get("actions", [])
+            is_triggered = self._rule_states.get(rule_id, False)
+            sensor_id = cond.get("device")
+            last_sensor_value = None
+            if sensor_id and sensor_id in self._last_sensor_payloads:
+                prop = cond.get("property", "value")
+                last_sensor_value = self._last_sensor_payloads[sensor_id].get(prop)
+
+            states.append({
+                "id": rule_id,
+                "enabled": cfg.get("enabled", True),
+                "condition": cond,
+                "actions": actions,
+                "retrigger": cfg.get("retrigger", False),
+                "is_triggered": is_triggered,
+                "last_sensor_value": last_sensor_value,
+            })
+        return states
+
+    def toggle_rule(self, rule_id: str) -> Optional[bool]:
+        """Dynamically enable or pause a rule."""
+        cfg = self.rules_config.get(rule_id)
+        if not cfg:
+            return None
+        new_state = not cfg.get("enabled", True)
+        cfg["enabled"] = new_state
+        if not new_state:
+            self._rule_states[rule_id] = False
+        return new_state
+
     async def _on_device_control_restored(self, event: Event) -> None:
         """Re-evaluate rules immediately when manual override is released (restored to AUTO)."""
         if not self._running:
