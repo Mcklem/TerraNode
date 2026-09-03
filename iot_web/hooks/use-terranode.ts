@@ -7,13 +7,17 @@ import {
   fetchHealth,
   fetchNodes,
   fetchOverrides,
+  restoreAllOverridesApi,
+  fetchRules,
   fetchSchedules,
+  toggleRule,
   toggleSchedule,
   triggerSchedule,
   type Device,
   type Health,
   type Mode,
   type Override,
+  type RuleState,
   type ScheduleState,
   type TerraNode,
 } from '@/lib/terranode-api'
@@ -24,6 +28,7 @@ export function useTerraNode(pollIntervalMs = 2000) {
   const [devices, setDevices] = useState<Device[]>([])
   const [overrides, setOverrides] = useState<Override[]>([])
   const [schedules, setSchedules] = useState<ScheduleState[]>([])
+  const [rules, setRules] = useState<RuleState[]>([])
 
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -50,12 +55,13 @@ export function useTerraNode(pollIntervalMs = 2000) {
     activeAbortController.current = abortController
 
     try {
-      const [h, n, d, o, s] = await Promise.all([
+      const [h, n, d, o, s, r] = await Promise.all([
         fetchHealth(abortController.signal),
         fetchNodes(abortController.signal),
         fetchDevices(abortController.signal),
         fetchOverrides(abortController.signal),
         fetchSchedules(abortController.signal).catch(() => []),
+        fetchRules(abortController.signal).catch(() => []),
       ])
 
       setHealth(h)
@@ -63,6 +69,7 @@ export function useTerraNode(pollIntervalMs = 2000) {
       setDevices(d)
       setOverrides(o)
       setSchedules(Array.isArray(s) ? s : [])
+      setRules(Array.isArray(r) ? r : [])
       setError('')
     } catch (e: any) {
       if (e?.name !== 'AbortError') {
@@ -271,6 +278,19 @@ export function useTerraNode(pollIntervalMs = 2000) {
     }
   }
 
+  const toggleRuleAction = async (ruleId: string) => {
+    setBusyId(`rule-${ruleId}`)
+    try {
+      const res = await toggleRule(ruleId)
+      notify(res.message || `Estado de regla '${ruleId}' actualizado`)
+      refresh()
+    } catch (e: any) {
+      notify(e instanceof Error ? e.message : 'Error al alternar la regla de automatización')
+    } finally {
+      setBusyId('')
+    }
+  }
+
   const executeRawPinCommand = async (
     nodeId: string,
     commandType: 'digital_write' | 'analog_write',
@@ -296,11 +316,12 @@ export function useTerraNode(pollIntervalMs = 2000) {
     if (!overrides.length) return
     setBusyId('global-restore')
     try {
-      await Promise.all(overrides.map((o) => restoreDeviceControl(o.device_id)))
-      notify('Todos los dispositivos fueron restaurados al modo AUTO')
+      const res = await restoreAllOverridesApi()
+      notify(res.message || 'Todos los dispositivos fueron restaurados al modo AUTO')
       refresh()
     } catch (e: any) {
       notify(e instanceof Error ? e.message : 'Error al restaurar overrides')
+      refresh()
     } finally {
       setBusyId('')
     }
@@ -312,6 +333,7 @@ export function useTerraNode(pollIntervalMs = 2000) {
     devices,
     overrides,
     schedules,
+    rules,
     loading,
     isRefreshing,
     error,
@@ -324,6 +346,7 @@ export function useTerraNode(pollIntervalMs = 2000) {
     restoreDeviceControl,
     triggerScheduleAction,
     toggleScheduleAction,
+    toggleRuleAction,
     executeRawPinCommand,
     restoreAllOverrides,
   }

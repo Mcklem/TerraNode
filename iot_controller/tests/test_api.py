@@ -151,12 +151,48 @@ class TestFastAPIWebService(unittest.IsolatedAsyncioTestCase):
         self.client.post("/api/v1/devices/pump_01/restore-control")
 
     def test_raw_pin_command(self):
+        # 1. Unallocated pin succeeds
         pin_resp = self.client.post(
             "/api/v1/nodes/n1/pin",
-            json={"command_type": "digital_write", "pin": "D5", "value": 1},
+            json={"command_type": "digital_write", "pin": "D1", "value": 1},
         )
         self.assertEqual(pin_resp.status_code, 200)
         self.assertEqual(pin_resp.json()["status"], "success")
+
+        # 2. Pin D5 reserved by pump_01 should return 400 conflict error when PinManager is present
+        system_container.pin_manager = self.pm
+        self.pm.validate_all({
+            "soil_01": {"type": "soil_moisture", "node": "n1", "pin": "A0"},
+            "pump_01": {"type": "relay", "node": "n1", "pin": "D5"},
+        })
+        conflict_resp = self.client.post(
+            "/api/v1/nodes/n1/pin",
+            json={"command_type": "digital_write", "pin": "D5", "value": 1},
+        )
+        self.assertEqual(conflict_resp.status_code, 400)
+        self.assertIn("reserved by active device 'pump_01'", conflict_resp.json()["detail"])
+
+    def test_delete_all_overrides(self):
+        # Create 2 overrides
+        self.client.post("/api/v1/devices/pump_01/command", json={"action": "turn_on"})
+        overrides = self.client.get("/api/v1/overrides").json()
+        self.assertEqual(len(overrides), 1)
+
+        # Delete all overrides at once
+        del_resp = self.client.delete("/api/v1/overrides")
+        self.assertEqual(del_resp.status_code, 200)
+        self.assertTrue(del_resp.json()["success"])
+        self.assertEqual(del_resp.json()["restored_count"], 1)
+
+        overrides_after = self.client.get("/api/v1/overrides").json()
+        self.assertEqual(len(overrides_after), 0)
+
+    def test_history_purge_endpoint(self):
+        purge_resp = self.client.post("/api/v1/history/purge?retention_days=30")
+        self.assertEqual(purge_resp.status_code, 200)
+        self.assertTrue(purge_resp.json()["success"])
+        self.assertEqual(purge_resp.json()["retention_days"], 30)
+
 
     async def test_history_paginated_endpoints(self):
         # Seed test database with records

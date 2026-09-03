@@ -9,6 +9,7 @@ import { HealthGrid } from './dashboard/HealthGrid'
 import { NodeGrid } from './dashboard/NodeGrid'
 import { OverrideList } from './dashboard/OverrideList'
 import { ScheduleGrid } from './dashboard/ScheduleGrid'
+import { RuleGrid } from './dashboard/RuleGrid'
 import { HistorySection } from './dashboard/history/HistorySection'
 import { ToastNotification } from './dashboard/ToastNotification'
 
@@ -19,6 +20,7 @@ export default function TerraNodeDashboard() {
     devices,
     overrides,
     schedules,
+    rules,
     loading,
     isRefreshing,
     error,
@@ -30,6 +32,7 @@ export default function TerraNodeDashboard() {
     restoreDeviceControl,
     triggerScheduleAction,
     toggleScheduleAction,
+    toggleRuleAction,
     executeRawPinCommand,
     restoreAllOverrides,
   } = useTerraNode(2000)
@@ -101,6 +104,15 @@ export default function TerraNodeDashboard() {
             busyId={busyId}
             onTrigger={triggerScheduleAction}
             onToggle={toggleScheduleAction}
+            onRefresh={refresh}
+          />
+        </ErrorBoundary>
+
+        <ErrorBoundary fallbackTitle="Error en Reglas de Automatización">
+          <RuleGrid
+            rules={rules}
+            busyId={busyId}
+            onToggle={toggleRuleAction}
             onRefresh={refresh}
           />
         </ErrorBoundary>

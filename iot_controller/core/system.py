@@ -120,10 +120,12 @@ class ControllerSystem:
         from api.dependencies import system_container
         system_container.device_manager = self.device_manager
         system_container.node_manager = self.node_manager
+        system_container.pin_manager = self.pin_manager
         system_container.health_monitor = self.health_monitor
         system_container.live_command_service = self.live_command_service
         system_container.override_registry = self.override_registry
         system_container.time_scheduler = self.time_scheduler
+        system_container.rule_engine = self.rule_engine
         system_container.db = self.db
 
         # Start FastAPI Web Service early if enabled in settings

@@ -214,3 +214,31 @@ export const TriggerResponseSchema = z.object({
   message: z.string(),
 })
 export type TriggerResponse = z.infer<typeof TriggerResponseSchema>
+
+/* Sensor Rules Schemas */
+
+export const RuleConditionSchema = z.object({
+  device: z.string(),
+  property: z.string().optional().default('value'),
+  operator: z.string(),
+  value: z.unknown(),
+})
+export type RuleCondition = z.infer<typeof RuleConditionSchema>
+
+export const RuleActionSchema = z.object({
+  device: z.string(),
+  command: z.string(),
+  args: z.record(z.string(), z.unknown()).optional(),
+})
+export type RuleAction = z.infer<typeof RuleActionSchema>
+
+export const RuleStateSchema = z.object({
+  id: z.string(),
+  enabled: z.boolean(),
+  condition: RuleConditionSchema,
+  actions: z.array(RuleActionSchema),
+  retrigger: z.boolean().optional().default(false),
+  is_triggered: z.boolean().optional().default(false),
+  last_sensor_value: z.unknown().optional().nullable(),
+})
+export type RuleState = z.infer<typeof RuleStateSchema>

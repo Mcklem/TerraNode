@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import devices, health, history, nodes, overrides, schedules
+from api.routes import devices, health, history, nodes, overrides, rules, schedules
 
 
 @asynccontextmanager
@@ -108,7 +108,7 @@ def create_app() -> FastAPI:
     # Enable CORS for web UI dashboards
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origin_regex=r"https?://.*",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -120,6 +120,7 @@ def create_app() -> FastAPI:
     app.include_router(devices.router)
     app.include_router(overrides.router)
     app.include_router(history.router)
+    app.include_router(rules.router)
     app.include_router(schedules.router)
 
     from fastapi.responses import JSONResponse

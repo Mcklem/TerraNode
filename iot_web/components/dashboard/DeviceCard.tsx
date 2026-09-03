@@ -115,6 +115,20 @@ export function DeviceCard({ device, nodeConnected = true, onCommand, onRestore,
             </span>
           </div>
 
+          {metrics.length > 0 && (
+            <div className="mt-1 flex items-center gap-2.5 text-[10px] font-mono text-[var(--muted-foreground)]">
+              {metrics.map((m, idx) => (
+                <div key={m.label} className="flex items-center gap-1">
+                  {idx > 0 && <span className="text-[var(--border)] font-normal mr-1.5">•</span>}
+                  <span className="text-[var(--muted-foreground)]">{m.label}:</span>
+                  <strong className="text-[var(--foreground)] font-mono font-semibold">
+                    {isDisconnected ? '—' : m.value}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="sparkline" aria-hidden="true">
             {Array.from({ length: 10 }, (_, i) => (
               <i key={i} className={isDisconnected ? 'opacity-20' : ''} />
@@ -127,17 +141,6 @@ export function DeviceCard({ device, nodeConnected = true, onCommand, onRestore,
               STATUS: {isDisconnected ? 'DISCONNECTED' : device.status}
             </span>
           </div>
-
-          {metrics.length > 0 && (
-            <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[var(--border)] pt-2 text-[10px] text-[var(--muted-foreground)]">
-              {metrics.map((m) => (
-                <div key={m.label}>
-                  <span>{m.label}: </span>
-                  <strong className="text-[var(--foreground)]">{isDisconnected ? '—' : m.value}</strong>
-                </div>
-              ))}
-            </div>
-          )}
         </>
       ) : isRelay ? (
         <div className="relay-control">
@@ -205,28 +208,10 @@ export function DeviceCard({ device, nodeConnected = true, onCommand, onRestore,
             onChange={(e) => setAngle(Number(e.target.value))}
           />
 
-          <div className="range-labels">
+          <div className="range-labels mb-2">
             <span>0°</span>
             <span>90°</span>
             <span>180°</span>
-          </div>
-
-          <div className="mt-2 flex items-center justify-between text-[9px] text-[var(--muted-foreground)]">
-            <span>TTL EXPIRATION:</span>
-            <select
-              disabled={isDisconnected}
-              className="bg-[#081318] border border-[var(--border)] rounded px-1 text-[10px] text-[var(--foreground)] disabled:opacity-50"
-              value={selectedTtl === null ? 'null' : selectedTtl}
-              onChange={(e) =>
-                setSelectedTtl(e.target.value === 'null' ? null : Number(e.target.value))
-              }
-            >
-              {TTL_OPTIONS.map((opt) => (
-                <option key={opt.label} value={opt.value === null ? 'null' : opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
           </div>
 
           <button
@@ -245,6 +230,24 @@ export function DeviceCard({ device, nodeConnected = true, onCommand, onRestore,
           >
             Apply angle <ArrowUpRight size={13} />
           </button>
+
+          <div className="mt-3 flex items-center justify-between text-[9px] text-[var(--muted-foreground)] font-mono">
+            <span>TTL MANUAL:</span>
+            <select
+              disabled={isDisconnected}
+              className="bg-[#081318] border border-[var(--border)] rounded px-1.5 py-0.5 text-[10px] text-[var(--foreground)] disabled:opacity-50"
+              value={selectedTtl === null ? 'null' : selectedTtl}
+              onChange={(e) =>
+                setSelectedTtl(e.target.value === 'null' ? null : Number(e.target.value))
+              }
+            >
+              {TTL_OPTIONS.map((opt) => (
+                <option key={opt.label} value={opt.value === null ? 'null' : opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
 

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, ConfigDict
-from api.dependencies import get_override_registry
-from services.live_command import OverrideRegistry
+from api.dependencies import get_override_registry, get_live_command_service
+from services.live_command import OverrideRegistry, LiveCommandService
 
 router = APIRouter(prefix="/api/v1/overrides", tags=["Overrides"])
 
@@ -48,3 +48,21 @@ async def list_active_overrides(override_reg: OverrideRegistry = Depends(get_ove
             "expires_at": st.expires_at,
         })
     return result
+
+
+@router.delete(
+    "",
+    response_model=Dict[str, Any],
+    summary="Restablecer todos los dispositivos al modo automático (AUTO)",
+    description="Elimina de forma masiva los bloqueos de override manual de todos los actuadores, restaurándolos al modo de automatización (`AUTO`).",
+)
+async def restore_all_overrides(
+    live_service: LiveCommandService = Depends(get_live_command_service),
+):
+    results = await live_service.restore_all_controls()
+    return {
+        "success": True,
+        "restored_count": len(results),
+        "message": f"Restablecido el control automático (AUTO) para {len(results)} dispositivo(s).",
+    }
+

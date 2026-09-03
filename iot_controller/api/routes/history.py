@@ -282,3 +282,33 @@ async def get_events_history(
         "offset": offset,
         "data": [EventRecord.model_validate(r) for r in records],
     }
+
+
+@router.post(
+    "/purge",
+    response_model=Dict[str, Any],
+    summary="Purgar datos históricos antiguos",
+    description="Elimina registros de telemetría, eventos, actuadores y ejecuciones de tareas con antigüedad mayor a `retention_days` días.",
+)
+async def purge_history(
+    retention_days: int = Query(30, ge=1, le=365, description="Días de retención histórica a mantener"),
+    db: Database = Depends(get_database),
+):
+    import time
+    from sqlalchemy import delete
+    cutoff = time.time() - (retention_days * 86400)
+
+    def _purge(session):
+        session.execute(delete(MeasurementModel).where(MeasurementModel.timestamp < cutoff))
+        session.execute(delete(EventModel).where(EventModel.timestamp < cutoff))
+        session.execute(delete(ActuatorHistoryModel).where(ActuatorHistoryModel.timestamp < cutoff))
+        session.execute(delete(NodeHistoryModel).where(NodeHistoryModel.timestamp < cutoff))
+        session.execute(delete(ScheduleHistoryModel).where(ScheduleHistoryModel.timestamp < cutoff))
+
+    await db.run_in_session(_purge)
+    return {
+        "success": True,
+        "retention_days": retention_days,
+        "message": f"Registros históricos anteriores a {retention_days} días purgados exitosamente.",
+    }
+

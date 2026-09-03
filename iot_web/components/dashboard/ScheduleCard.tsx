@@ -355,7 +355,7 @@ export function ScheduleCard({
               }
             />
             {schedule.is_duration_active
-              ? 'DURACIÓN ACTIVA'
+              ? 'EJECUTANDO'
               : schedule.enabled
               ? 'ACTIVO'
               : 'PAUSADO'}

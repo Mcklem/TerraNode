@@ -15,6 +15,7 @@ import {
   PaginatedEventsSchema,
   PaginatedSchedulesHistorySchema,
   ScheduleStateSchema,
+  RuleStateSchema,
   TriggerResponseSchema,
   type Mode,
   type DeviceStatus,
@@ -33,6 +34,7 @@ import {
   type ScheduleHistoryRecord,
   type PaginatedSchedulesHistory,
   type ScheduleState,
+  type RuleState,
   type TriggerResponse,
 } from './schemas'
 
@@ -59,6 +61,7 @@ export type {
   ScheduleHistoryRecord,
   PaginatedSchedulesHistory,
   ScheduleState,
+  RuleState,
   TriggerResponse,
 }
 
@@ -113,6 +116,11 @@ export const fetchDevices = (signal?: AbortSignal) =>
 export const fetchOverrides = (signal?: AbortSignal) =>
   apiFetch<Override[]>('/overrides', z.array(OverrideSchema), { signal })
 
+export const restoreAllOverridesApi = () =>
+  apiFetch<{ success: boolean; restored_count: number; message: string }>('/overrides', undefined, {
+    method: 'DELETE',
+  })
+
 export const fetchSchedules = (signal?: AbortSignal) =>
   apiFetch<ScheduleState[]>('/schedules', z.array(ScheduleStateSchema), { signal })
 
@@ -128,18 +136,30 @@ export const toggleSchedule = (scheduleId: string) =>
     { method: 'POST' }
   )
 
+export const fetchRules = (signal?: AbortSignal) =>
+  apiFetch<RuleState[]>('/rules', z.array(RuleStateSchema), { signal })
+
+export const toggleRule = (ruleId: string) =>
+  apiFetch<{ rule_id: string; enabled: boolean; message: string }>(
+    `/rules/${ruleId}/toggle`,
+    undefined,
+    { method: 'POST' }
+  )
+
 /* History API Fetchers */
 
 export const fetchMeasurementsHistory = (
   deviceId?: string,
   limit = 50,
   offset = 0,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  order = 'desc'
 ) => {
   const params = new URLSearchParams()
   if (deviceId) params.append('device_id', deviceId)
   params.append('limit', String(limit))
   params.append('offset', String(offset))
+  params.append('order', order)
   return apiFetch<PaginatedMeasurements>(
     `/history/measurements?${params.toString()}`,
     PaginatedMeasurementsSchema,
