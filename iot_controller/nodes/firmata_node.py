@@ -52,10 +52,11 @@ class FirmataNode(BaseNode):
 
             try:
                 loop = asyncio.get_running_loop()
-                self._board = await asyncio.wait_for(
+                board = await asyncio.wait_for(
                     loop.run_in_executor(None, _init_board),
                     timeout=self.timeout
                 )
+                self._board = board
                 self._latency_ms = (time.time() - start_time) * 1000
                 self._mark_connected()
                 self._logger.info(f"Successfully connected to Node {self.id} (latency: {self._latency_ms:.1f}ms).")

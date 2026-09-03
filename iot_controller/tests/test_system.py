@@ -93,6 +93,57 @@ rules:
         finally:
             settings.enable_api = False
 
+    async def test_multi_node_system_with_api_enabled(self):
+        multi_config_path = os.path.join(self.temp_dir.name, "system_multi.yaml")
+        db_path = os.path.join(self.temp_dir.name, "test_multi_system.db").replace("\\", "/")
+        yaml_content = f"""
+system:
+  name: multi_controller
+  version: "1.0"
+  database: "{db_path}"
+
+nodes:
+  n1:
+    driver: mock
+    host: 127.0.0.1
+    port: 3030
+    enabled: true
+  n2:
+    driver: mock
+    host: 127.0.0.2
+    port: 3030
+    enabled: true
+
+devices:
+  ldr_01:
+    type: ldr
+    node: n1
+    pin: A0
+    poll_interval: 1
+  soil_01:
+    type: soil_moisture
+    node: n2
+    pin: A0
+    poll_interval: 1
+"""
+        with open(multi_config_path, "w", encoding="utf-8") as f:
+            f.write(yaml_content)
+
+        from core.settings import settings
+        settings.enable_api = True
+        settings.api_port = 8898
+        try:
+            system = ControllerSystem(multi_config_path)
+            await system.start()
+            self.assertTrue(system._running)
+            self.assertIsNotNone(system.api_task)
+            health = system.health_monitor.get_system_health()
+            self.assertIn("n1", health["nodes"])
+            self.assertIn("n2", health["nodes"])
+            await system.stop()
+        finally:
+            settings.enable_api = False
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -97,6 +97,23 @@ system:
   log_rule_evaluations: true
 
 nodes:
+  soil_01:
+    driver: standard_firmata_wifi
+    host: 192.168.1.107
+    port: 3030
+    enabled: true
+    arduino_wait: 5
+    max_retries: 3
+    timeout: 12
+    devices:
+      soil_moisture_01:
+        type: soil_moisture
+        pin: A0                   # Analog pin
+        poll_interval: 30        # Polling interval in seconds
+        calibration:              # Calibration mapping (dry -> 0%, wet -> 100%)
+          dry: 900
+          wet: 350
+
   weather_01:
     driver: standard_firmata_wifi
     host: 192.168.1.37

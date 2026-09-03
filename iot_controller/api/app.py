@@ -1,6 +1,22 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.routes import devices, health, history, nodes, overrides, schedules
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from api.dependencies import system_container
+    system_instance = None
+    if system_container.node_manager is None:
+        from core.system import ControllerSystem
+        system_instance = ControllerSystem()
+        await system_instance.start()
+    try:
+        yield
+    finally:
+        if system_instance:
+            await system_instance.stop()
 
 
 tags_metadata = [
@@ -86,6 +102,7 @@ def create_app() -> FastAPI:
         openapi_tags=tags_metadata,
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=lifespan,
     )
 
     # Enable CORS for web UI dashboards
