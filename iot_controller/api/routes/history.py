@@ -3,7 +3,14 @@ from typing import Any, Dict, Generic, List, Optional, TypeVar
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import func, select
 from api.dependencies import get_database
-from storage.database import ActuatorHistoryModel, Database, EventModel, MeasurementModel, NodeHistoryModel
+from storage.database import (
+    ActuatorHistoryModel,
+    Database,
+    EventModel,
+    MeasurementModel,
+    NodeHistoryModel,
+    ScheduleHistoryModel,
+)
 
 router = APIRouter(prefix="/api/v1/history", tags=["History"])
 
@@ -54,6 +61,19 @@ class EventRecord(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ScheduleHistoryRecord(BaseModel):
+    id: int = Field(..., description="ID autoincremental de la ejecución")
+    timestamp: float = Field(..., description="Timestamp Unix del disparo o finalización")
+    schedule_id: str = Field(..., description="ID de la tarea programada (ej. 'riego_matutino')")
+    device_id: str = Field(..., description="ID del actuador objetivo (ej. 'irrigation_pump')")
+    action: str = Field(..., description="Comando o acción ejecutada ('turn_on', 'turn_off')")
+    event_type: str = Field(..., description="Fase de la ejecución ('TRIGGERED', 'COMPLETED', 'BLOCKED')")
+    duration: Optional[float] = Field(None, description="Duración activa configurada en segundos")
+    status: str = Field(..., description="Resultado de la ejecución ('SUCCESS', 'BLOCKED', 'FAILED')")
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class PaginatedMeasurementsResponse(BaseModel):
     total: int = Field(..., description="Número total de registros coincidentes en la base de datos")
     limit: int = Field(..., description="Límite máximo de registros retornados en la página")
@@ -80,6 +100,13 @@ class PaginatedEventsResponse(BaseModel):
     limit: int = Field(..., description="Límite de registros devueltos")
     offset: int = Field(..., description="Desplazamiento inicial de la consulta")
     data: List[EventRecord] = Field(..., description="Lista de auditoría de eventos")
+
+
+class PaginatedSchedulesHistoryResponse(BaseModel):
+    total: int = Field(..., description="Número total de registros de auditoría de schedules")
+    limit: int = Field(..., description="Límite de registros devueltos")
+    offset: int = Field(..., description="Desplazamiento inicial de la consulta")
+    data: List[ScheduleHistoryRecord] = Field(..., description="Lista de eventos del scheduler")
 
 
 @router.get(
@@ -123,7 +150,7 @@ async def get_measurements_history(
 )
 async def get_actuators_history(
     device_id: Optional[str] = Query(None, description="Filtrar por ID específico de actuador (ej. 'pump_01')"),
-    source: Optional[str] = Query(None, description="Filtrar por origen del comando ('LIVE_MANUAL', 'RULE_ENGINE')"),
+    source: Optional[str] = Query(None, description="Filtrar por origen del comando ('LIVE_MANUAL', 'RULE_ENGINE', 'SCHEDULER')"),
     limit: int = Query(50, ge=1, le=500, description="Cantidad máxima de registros"),
     offset: int = Query(0, ge=0, description="Desplazamiento inicial"),
     db: Database = Depends(get_database),
@@ -182,6 +209,43 @@ async def get_nodes_history(
         "limit": limit,
         "offset": offset,
         "data": [NodeHistoryRecord.model_validate(r) for r in records],
+    }
+
+
+@router.get(
+    "/schedules",
+    response_model=PaginatedSchedulesHistoryResponse,
+    summary="Consultar historial de ejecuciones del scheduler (Paginado)",
+    description="Retorna la bitácora histórica de disparos (`TRIGGERED`), expiraciones de duración (`COMPLETED`) y bloqueos (`BLOCKED`) de tareas temporales del `TimeScheduler`.",
+)
+async def get_schedules_history(
+    schedule_id: Optional[str] = Query(None, description="Filtrar por ID de tarea programada (ej. 'riego_matutino')"),
+    device_id: Optional[str] = Query(None, description="Filtrar por ID de actuador objetivo (ej. 'irrigation_pump')"),
+    limit: int = Query(50, ge=1, le=500, description="Cantidad máxima de registros"),
+    offset: int = Query(0, ge=0, description="Desplazamiento inicial"),
+    db: Database = Depends(get_database),
+):
+    def _query(session):
+        stmt_count = select(func.count(ScheduleHistoryModel.id))
+        stmt_data = select(ScheduleHistoryModel).order_by(ScheduleHistoryModel.timestamp.desc())
+
+        if schedule_id:
+            stmt_count = stmt_count.where(ScheduleHistoryModel.schedule_id == schedule_id)
+            stmt_data = stmt_data.where(ScheduleHistoryModel.schedule_id == schedule_id)
+        if device_id:
+            stmt_count = stmt_count.where(ScheduleHistoryModel.device_id == device_id)
+            stmt_data = stmt_data.where(ScheduleHistoryModel.device_id == device_id)
+
+        total = session.scalar(stmt_count) or 0
+        records = session.scalars(stmt_data.limit(limit).offset(offset)).all()
+        return total, records
+
+    total, records = await db.run_in_session(_query)
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "data": [ScheduleHistoryRecord.model_validate(r) for r in records],
     }
 
 

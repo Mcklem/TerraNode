@@ -4,6 +4,7 @@ import {
   Activity,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Cpu,
   Power,
   RefreshCw,
@@ -14,6 +15,7 @@ import { ActuatorsTable } from './ActuatorsTable'
 import { EventsHistoryTable } from './EventsHistoryTable'
 import { MeasurementsTable } from './MeasurementsTable'
 import { NodesHistoryTable } from './NodesHistoryTable'
+import { SchedulesHistoryTable } from './SchedulesHistoryTable'
 
 export function HistorySection() {
   const {
@@ -27,6 +29,8 @@ export function HistorySection() {
     setDeviceIdFilter,
     nodeIdFilter,
     setNodeIdFilter,
+    scheduleIdFilter,
+    setScheduleIdFilter,
     sourceFilter,
     setSourceFilter,
     topicFilter,
@@ -37,6 +41,7 @@ export function HistorySection() {
     measurementsData,
     actuatorsData,
     nodesData,
+    schedulesData,
     eventsData,
     refresh,
   } = useHistory()
@@ -48,6 +53,8 @@ export function HistorySection() {
       ? actuatorsData.total
       : activeTab === 'nodes'
       ? nodesData.total
+      : activeTab === 'schedules'
+      ? schedulesData.total
       : eventsData.total
 
   const totalPages = Math.max(1, Math.ceil(currentTotal / limit))
@@ -104,6 +111,14 @@ export function HistorySection() {
 
           <button
             type="button"
+            className={`tab-item ${activeTab === 'schedules' ? 'active' : ''}`}
+            onClick={() => setActiveTab('schedules')}
+          >
+            <Clock size={15} /> Programaciones ({totals.schedules})
+          </button>
+
+          <button
+            type="button"
             className={`tab-item ${activeTab === 'events' ? 'active' : ''}`}
             onClick={() => setActiveTab('events')}
           >
@@ -144,6 +159,17 @@ export function HistorySection() {
               records={nodesData.records}
               nodeIdFilter={nodeIdFilter}
               onNodeIdChange={setNodeIdFilter}
+              loading={loading}
+            />
+          )}
+
+          {activeTab === 'schedules' && (
+            <SchedulesHistoryTable
+              records={schedulesData.records}
+              scheduleIdFilter={scheduleIdFilter}
+              deviceIdFilter={deviceIdFilter}
+              onScheduleIdChange={setScheduleIdFilter}
+              onDeviceIdChange={setDeviceIdFilter}
               loading={loading}
             />
           )}

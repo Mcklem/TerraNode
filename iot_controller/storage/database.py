@@ -61,6 +61,20 @@ class ActuatorHistoryModel(Base):
     user_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
 
+class ScheduleHistoryModel(Base):
+    """Historical record of time scheduler executions, durations, and completions."""
+    __tablename__ = "schedule_history"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[float] = mapped_column(Float, nullable=False, index=True)
+    schedule_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    device_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(32), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)  # TRIGGERED, COMPLETED, BLOCKED
+    duration: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False)       # SUCCESS, BLOCKED, FAILED
+
+
 class Database:
     """Thread-safe SQLAlchemy 2.0 ORM Database connection and schema manager."""
 

@@ -6,13 +6,15 @@ import {
   fetchEventsHistory,
   fetchMeasurementsHistory,
   fetchNodesHistory,
+  fetchSchedulesHistory,
   type ActuatorHistoryRecord,
   type EventRecord,
   type MeasurementRecord,
   type NodeHistoryRecord,
+  type ScheduleHistoryRecord,
 } from '@/lib/terranode-api'
 
-export type HistoryTab = 'measurements' | 'actuators' | 'nodes' | 'events'
+export type HistoryTab = 'measurements' | 'actuators' | 'nodes' | 'schedules' | 'events'
 
 export function useHistory() {
   const [activeTab, setActiveTab] = useState<HistoryTab>('measurements')
@@ -22,6 +24,7 @@ export function useHistory() {
 
   const [deviceIdFilter, setDeviceIdFilter] = useState('')
   const [nodeIdFilter, setNodeIdFilter] = useState('')
+  const [scheduleIdFilter, setScheduleIdFilter] = useState('')
   const [sourceFilter, setSourceFilter] = useState('')
   const [topicFilter, setTopicFilter] = useState('')
 
@@ -33,6 +36,7 @@ export function useHistory() {
     measurements: 0,
     actuators: 0,
     nodes: 0,
+    schedules: 0,
     events: 0,
   })
 
@@ -51,6 +55,11 @@ export function useHistory() {
     records: [],
   })
 
+  const [schedulesData, setSchedulesData] = useState<{ total: number; records: ScheduleHistoryRecord[] }>({
+    total: 0,
+    records: [],
+  })
+
   const [eventsData, setEventsData] = useState<{ total: number; records: EventRecord[] }>({
     total: 0,
     records: [],
@@ -58,19 +67,21 @@ export function useHistory() {
 
   const activeAbortRef = useRef<AbortController | null>(null)
 
-  // Carga inicial de totales de las 4 categorías para actualizar las pestañas
+  // Carga inicial de totales de las 5 categorías para actualizar las pestañas
   const loadTotals = useCallback(async (signal?: AbortSignal) => {
     try {
-      const [m, a, n, e] = await Promise.all([
+      const [m, a, n, s, e] = await Promise.all([
         fetchMeasurementsHistory(undefined, 1, 0, signal),
         fetchActuatorsHistory(undefined, undefined, 1, 0, signal),
         fetchNodesHistory(undefined, 1, 0, signal),
+        fetchSchedulesHistory(undefined, undefined, 1, 0, signal),
         fetchEventsHistory(undefined, 1, 0, signal),
       ])
       setTotals({
         measurements: m?.total ?? 0,
         actuators: a?.total ?? 0,
         nodes: n?.total ?? 0,
+        schedules: s?.total ?? 0,
         events: e?.total ?? 0,
       })
     } catch {
@@ -118,6 +129,18 @@ export function useHistory() {
         const total = typeof res?.total === 'number' ? res.total : records.length
         setNodesData({ total, records })
         setTotals((prev) => ({ ...prev, nodes: total }))
+      } else if (activeTab === 'schedules') {
+        const res = await fetchSchedulesHistory(
+          scheduleIdFilter || undefined,
+          deviceIdFilter || undefined,
+          limit,
+          offset,
+          controller.signal
+        )
+        const records = Array.isArray(res?.data) ? res.data : []
+        const total = typeof res?.total === 'number' ? res.total : records.length
+        setSchedulesData({ total, records })
+        setTotals((prev) => ({ ...prev, schedules: total }))
       } else if (activeTab === 'events') {
         const res = await fetchEventsHistory(topicFilter || undefined, limit, offset, controller.signal)
         const records = Array.isArray(res?.data) ? res.data : []
@@ -132,7 +155,7 @@ export function useHistory() {
     } finally {
       setLoading(false)
     }
-  }, [activeTab, page, limit, deviceIdFilter, nodeIdFilter, sourceFilter, topicFilter, loadTotals])
+  }, [activeTab, page, limit, deviceIdFilter, nodeIdFilter, scheduleIdFilter, sourceFilter, topicFilter, loadTotals])
 
   useEffect(() => {
     loadData()
@@ -159,6 +182,8 @@ export function useHistory() {
     setDeviceIdFilter: (val: string) => { setDeviceIdFilter(val); setPage(1); },
     nodeIdFilter,
     setNodeIdFilter: (val: string) => { setNodeIdFilter(val); setPage(1); },
+    scheduleIdFilter,
+    setScheduleIdFilter: (val: string) => { setScheduleIdFilter(val); setPage(1); },
     sourceFilter,
     setSourceFilter: (val: string) => { setSourceFilter(val); setPage(1); },
     topicFilter,
@@ -169,6 +194,7 @@ export function useHistory() {
     measurementsData,
     actuatorsData,
     nodesData,
+    schedulesData,
     eventsData,
     refresh: loadData,
   }

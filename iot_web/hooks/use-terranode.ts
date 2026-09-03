@@ -7,10 +7,14 @@ import {
   fetchHealth,
   fetchNodes,
   fetchOverrides,
+  fetchSchedules,
+  toggleSchedule,
+  triggerSchedule,
   type Device,
   type Health,
   type Mode,
   type Override,
+  type ScheduleState,
   type TerraNode,
 } from '@/lib/terranode-api'
 
@@ -19,6 +23,7 @@ export function useTerraNode(pollIntervalMs = 4000) {
   const [nodes, setNodes] = useState<TerraNode[]>([])
   const [devices, setDevices] = useState<Device[]>([])
   const [overrides, setOverrides] = useState<Override[]>([])
+  const [schedules, setSchedules] = useState<ScheduleState[]>([])
 
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -45,17 +50,19 @@ export function useTerraNode(pollIntervalMs = 4000) {
     activeAbortController.current = abortController
 
     try {
-      const [h, n, d, o] = await Promise.all([
+      const [h, n, d, o, s] = await Promise.all([
         fetchHealth(abortController.signal),
         fetchNodes(abortController.signal),
         fetchDevices(abortController.signal),
         fetchOverrides(abortController.signal),
+        fetchSchedules(abortController.signal).catch(() => []),
       ])
 
       setHealth(h)
       setNodes(n)
       setDevices(d)
       setOverrides(o)
+      setSchedules(Array.isArray(s) ? s : [])
       setError('')
     } catch (e: any) {
       if (e?.name !== 'AbortError') {
@@ -163,6 +170,32 @@ export function useTerraNode(pollIntervalMs = 4000) {
     }
   }
 
+  const triggerScheduleAction = async (scheduleId: string) => {
+    setBusyId(`sched-${scheduleId}`)
+    try {
+      const res = await triggerSchedule(scheduleId)
+      notify(res.message || `Tarea programada '${scheduleId}' disparada manualmente`)
+      await refresh()
+    } catch (e: any) {
+      notify(e instanceof Error ? e.message : 'Error al disparar la tarea programada')
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  const toggleScheduleAction = async (scheduleId: string) => {
+    setBusyId(`sched-${scheduleId}`)
+    try {
+      const res = await toggleSchedule(scheduleId)
+      notify(res.message || `Estado de '${scheduleId}' actualizado`)
+      await refresh()
+    } catch (e: any) {
+      notify(e instanceof Error ? e.message : 'Error al alternar la tarea programada')
+    } finally {
+      setBusyId('')
+    }
+  }
+
   const executeRawPinCommand = async (
     nodeId: string,
     commandType: 'digital_write' | 'analog_write',
@@ -203,6 +236,7 @@ export function useTerraNode(pollIntervalMs = 4000) {
     nodes,
     devices,
     overrides,
+    schedules,
     loading,
     isRefreshing,
     error,
@@ -213,6 +247,8 @@ export function useTerraNode(pollIntervalMs = 4000) {
     refresh: () => refresh(true),
     executeDeviceCommand,
     restoreDeviceControl,
+    triggerScheduleAction,
+    toggleScheduleAction,
     executeRawPinCommand,
     restoreAllOverrides,
   }

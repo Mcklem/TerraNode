@@ -13,6 +13,9 @@ import {
   PaginatedActuatorsSchema,
   PaginatedNodesSchema,
   PaginatedEventsSchema,
+  PaginatedSchedulesHistorySchema,
+  ScheduleStateSchema,
+  TriggerResponseSchema,
   type Mode,
   type DeviceStatus,
   type NodeStatus,
@@ -27,6 +30,10 @@ import {
   type PaginatedNodes,
   type EventRecord,
   type PaginatedEvents,
+  type ScheduleHistoryRecord,
+  type PaginatedSchedulesHistory,
+  type ScheduleState,
+  type TriggerResponse,
 } from './schemas'
 
 export type {
@@ -49,6 +56,10 @@ export type {
   PaginatedNodes,
   EventRecord,
   PaginatedEvents,
+  ScheduleHistoryRecord,
+  PaginatedSchedulesHistory,
+  ScheduleState,
+  TriggerResponse,
 }
 
 export const apiFetch = async <T>(
@@ -102,6 +113,21 @@ export const fetchDevices = (signal?: AbortSignal) =>
 export const fetchOverrides = (signal?: AbortSignal) =>
   apiFetch<Override[]>('/overrides', z.array(OverrideSchema), { signal })
 
+export const fetchSchedules = (signal?: AbortSignal) =>
+  apiFetch<ScheduleState[]>('/schedules', z.array(ScheduleStateSchema), { signal })
+
+export const triggerSchedule = (scheduleId: string) =>
+  apiFetch<TriggerResponse>(`/schedules/${scheduleId}/trigger`, TriggerResponseSchema, {
+    method: 'POST',
+  })
+
+export const toggleSchedule = (scheduleId: string) =>
+  apiFetch<{ schedule_id: string; enabled: boolean; message: string }>(
+    `/schedules/${scheduleId}/toggle`,
+    undefined,
+    { method: 'POST' }
+  )
+
 /* History API Fetchers */
 
 export const fetchMeasurementsHistory = (
@@ -153,6 +179,25 @@ export const fetchNodesHistory = (
   return apiFetch<PaginatedNodes>(
     `/history/nodes?${params.toString()}`,
     PaginatedNodesSchema,
+    { signal }
+  )
+}
+
+export const fetchSchedulesHistory = (
+  scheduleId?: string,
+  deviceId?: string,
+  limit = 50,
+  offset = 0,
+  signal?: AbortSignal
+) => {
+  const params = new URLSearchParams()
+  if (scheduleId) params.append('schedule_id', scheduleId)
+  if (deviceId) params.append('device_id', deviceId)
+  params.append('limit', String(limit))
+  params.append('offset', String(offset))
+  return apiFetch<PaginatedSchedulesHistory>(
+    `/history/schedules?${params.toString()}`,
+    PaginatedSchedulesHistorySchema,
     { signal }
   )
 }

@@ -5,7 +5,7 @@ import unittest
 from sqlalchemy import select
 from core.event_bus import EventBus
 from core.node_manager import NodeManager
-from storage.database import ActuatorHistoryModel, Database, MeasurementModel, NodeHistoryModel
+from storage.database import ActuatorHistoryModel, Database, MeasurementModel, NodeHistoryModel, ScheduleHistoryModel
 from storage.repositories import StorageManager
 
 
@@ -88,6 +88,26 @@ class TestStorage(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(node_logs[0].host, "192.168.1.50")
         self.assertEqual(node_logs[0].port, 3030)
         self.assertEqual(node_logs[0].event, "CONNECTED")
+
+    async def test_schedule_history_logging(self):
+        await self.bus.publish(
+            "schedule.triggered",
+            sender="riego_matutino",
+            payload={"schedule_id": "riego_matutino", "device_id": "pump_01", "action": "turn_on", "duration": 900, "status": "SUCCESS"},
+        )
+
+        await asyncio.sleep(0.1)
+
+        def _query(session):
+            stmt = select(ScheduleHistoryModel).where(ScheduleHistoryModel.schedule_id == "riego_matutino")
+            return session.scalars(stmt).all()
+
+        sched_logs = await self.db.run_in_session(_query)
+        self.assertEqual(len(sched_logs), 1)
+        self.assertEqual(sched_logs[0].device_id, "pump_01")
+        self.assertEqual(sched_logs[0].action, "turn_on")
+        self.assertEqual(sched_logs[0].duration, 900.0)
+        self.assertEqual(sched_logs[0].status, "SUCCESS")
 
 
 if __name__ == "__main__":

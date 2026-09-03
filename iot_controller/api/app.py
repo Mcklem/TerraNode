@@ -1,6 +1,22 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import devices, health, history, nodes, overrides
+from api.routes import devices, health, history, nodes, overrides, schedules
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from api.dependencies import system_container
+    system_instance = None
+    if system_container.node_manager is None:
+        from core.system import ControllerSystem
+        system_instance = ControllerSystem()
+        await system_instance.start()
+    try:
+        yield
+    finally:
+        if system_instance:
+            await system_instance.stop()
 
 
 tags_metadata = [
@@ -10,6 +26,14 @@ tags_metadata = [
             "Operaciones sobre **sensores y actuadores**. Permite consultar lecturas en tiempo real, "
             "estados de salud hardware, emitir **comandos de control manual** (`turn_on`, `turn_off`, `set_position`) "
             "y restablecer el control automático a las reglas del sistema (`AUTO`)."
+        ),
+    },
+    {
+        "name": "Schedules",
+        "description": (
+            "Gestión y consulta de **Programaciones Temporales y Calendario (`TimeScheduler`)**. "
+            "Permite programar la activación/desactivación de actuadores por hora fija (`HH:MM`), "
+            "frecuencia por intervalo, duración activa (`duration`) y días de la semana/expresiones cron."
         ),
     },
     {
@@ -52,16 +76,19 @@ La API RESTful de TerraNode proporciona una interfaz desacoplada para el monitor
 ### 🔑 Conceptos Clave de Control y Prevalencia
 
 1. **Modos de Control Tri-Estado (`ControlMode`):**
-   - **`AUTO`:** El dispositivo responde a los eventos y reglas del motor de automatización (`RuleEngine`) y programadores (`Scheduler`).
-   - **`MANUAL_ON`:** El dispositivo se encuentra forzado a encendido. **Las reglas automáticas son ignoradas/bloqueadas** si intentan apagarlo.
-   - **`MANUAL_OFF`:** El dispositivo se encuentra forzado a apagado. Las reglas automáticas son ignoradas si intentan encenderlo.
+   - **`AUTO`:** El dispositivo responde a los eventos y reglas del motor de automatización (`RuleEngine`) y programadores (`Scheduler` / `TimeScheduler`).
+   - **`MANUAL_ON`:** El dispositivo se encuentra forzado a encendido. **Las reglas y tareas programadas son ignoradas/bloqueadas** si intentan apagarlo.
+   - **`MANUAL_OFF`:** El dispositivo se encuentra forzado a apagado. Las reglas y tareas programadas son ignoradas si intentan encenderlo.
    - **`MANUAL_VALUE`:** Para actuadores analógicos/servos fijados manualmente a un valor específico.
 
 2. **Comandos en Vivo (*Live Commands*):**
    - Al enviar un comando mediante `POST /api/v1/devices/{device_id}/command`, la orden se ejecuta de inmediato sobre el nodo físico y **fija el modo de override manual**.
-   - Para devolver el dispositivo al control automático de reglas, se debe invocar `POST /api/v1/devices/{device_id}/restore-control`.
+   - Para devolver el dispositivo al control automático de reglas y schedules, se debe invocar `POST /api/v1/devices/{device_id}/restore-control`.
 
-3. **Consultas Históricas Paginadas (`/api/v1/history`):**
+3. **Programación Temporal (`/api/v1/schedules`):**
+   - Automatización basada en horas fijas, intervalos periódicos y temporizadores de duración activa (`duration`).
+
+4. **Consultas Históricas Paginadas (`/api/v1/history`):**
    - Todos los endpoints históricos aceptan `limit` (por defecto 50, máx 500) y `offset` (desplazamiento para paginación) junto a filtros por `device_id`, `node_id`, `source` o `topic`.
 """
 
@@ -75,6 +102,7 @@ def create_app() -> FastAPI:
         openapi_tags=tags_metadata,
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=lifespan,
     )
 
     # Enable CORS for web UI dashboards
@@ -92,5 +120,6 @@ def create_app() -> FastAPI:
     app.include_router(devices.router)
     app.include_router(overrides.router)
     app.include_router(history.router)
+    app.include_router(schedules.router)
 
     return app
