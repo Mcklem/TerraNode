@@ -2,12 +2,14 @@
 
 import { Activity } from 'lucide-react'
 import { useTerraNode } from '@/hooks/use-terranode'
+import { ErrorBoundary } from './ErrorBoundary'
 import { DeviceGrid } from './dashboard/DeviceGrid'
 import { Header } from './dashboard/Header'
 import { HealthGrid } from './dashboard/HealthGrid'
 import { NodeGrid } from './dashboard/NodeGrid'
 import { OverrideList } from './dashboard/OverrideList'
 import { ScheduleGrid } from './dashboard/ScheduleGrid'
+import { RuleGrid } from './dashboard/RuleGrid'
 import { HistorySection } from './dashboard/history/HistorySection'
 import { ToastNotification } from './dashboard/ToastNotification'
 
@@ -18,6 +20,7 @@ export default function TerraNodeDashboard() {
     devices,
     overrides,
     schedules,
+    rules,
     loading,
     isRefreshing,
     error,
@@ -29,9 +32,10 @@ export default function TerraNodeDashboard() {
     restoreDeviceControl,
     triggerScheduleAction,
     toggleScheduleAction,
+    toggleRuleAction,
     executeRawPinCommand,
     restoreAllOverrides,
-  } = useTerraNode(4000)
+  } = useTerraNode(2000)
 
   return (
     <main className="min-h-screen bg-background text-foreground font-sans">
@@ -64,45 +68,67 @@ export default function TerraNodeDashboard() {
           </div>
         </section>
 
-        <HealthGrid
-          health={health}
-          nodes={nodes}
-          devicesCount={devices.length}
-          overridesCount={overrides.length}
-          loading={loading}
-          error={error}
-        />
+        <ErrorBoundary fallbackTitle="Error en Métricas del Sistema">
+          <HealthGrid
+            health={health}
+            nodes={nodes}
+            devicesCount={devices.length}
+            overridesCount={overrides.length}
+            loading={loading}
+            error={error}
+          />
+        </ErrorBoundary>
 
-        <NodeGrid
-          nodes={nodes}
-          onRefresh={refresh}
-          onExecuteRawPin={executeRawPinCommand}
-          busyId={busyId}
-        />
+        <ErrorBoundary fallbackTitle="Error en Nodos Hardware">
+          <NodeGrid
+            nodes={nodes}
+            onRefresh={refresh}
+            onExecuteRawPin={executeRawPinCommand}
+            busyId={busyId}
+          />
+        </ErrorBoundary>
 
-        <DeviceGrid
-          devices={devices}
-          busyId={busyId}
-          onCommand={executeDeviceCommand}
-          onRestore={restoreDeviceControl}
-        />
+        <ErrorBoundary fallbackTitle="Error en Dispositivos y Actuadores">
+          <DeviceGrid
+            devices={devices}
+            nodes={nodes}
+            busyId={busyId}
+            onCommand={executeDeviceCommand}
+            onRestore={restoreDeviceControl}
+          />
+        </ErrorBoundary>
 
-        <ScheduleGrid
-          schedules={schedules}
-          busyId={busyId}
-          onTrigger={triggerScheduleAction}
-          onToggle={toggleScheduleAction}
-          onRefresh={refresh}
-        />
+        <ErrorBoundary fallbackTitle="Error en Tareas Programadas">
+          <ScheduleGrid
+            schedules={schedules}
+            busyId={busyId}
+            onTrigger={triggerScheduleAction}
+            onToggle={toggleScheduleAction}
+            onRefresh={refresh}
+          />
+        </ErrorBoundary>
 
-        <OverrideList
-          overrides={overrides}
-          onRestore={restoreDeviceControl}
-          onRestoreAll={restoreAllOverrides}
-          busyId={busyId}
-        />
+        <ErrorBoundary fallbackTitle="Error en Reglas de Automatización">
+          <RuleGrid
+            rules={rules}
+            busyId={busyId}
+            onToggle={toggleRuleAction}
+            onRefresh={refresh}
+          />
+        </ErrorBoundary>
 
-        <HistorySection />
+        <ErrorBoundary fallbackTitle="Error en Lista de Overrides">
+          <OverrideList
+            overrides={overrides}
+            onRestore={restoreDeviceControl}
+            onRestoreAll={restoreAllOverrides}
+            busyId={busyId}
+          />
+        </ErrorBoundary>
+
+        <ErrorBoundary fallbackTitle="Error en Sección de Historial">
+          <HistorySection />
+        </ErrorBoundary>
       </div>
 
       <ToastNotification message={toast} onClose={() => setToast('')} />

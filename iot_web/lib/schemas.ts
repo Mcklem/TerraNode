@@ -21,17 +21,17 @@ export const NodeInfoSchema = z.object({
 export type TerraNode = z.infer<typeof NodeInfoSchema>
 
 export const DeviceStateSchema = z.object({
-  device_id: z.string().optional(),
-  state: z.string().optional(),
-  raw_value: z.number().optional(),
-  value: z.number().optional(),
-  moisture_percent: z.number().optional(),
-  temperature: z.number().optional(),
-  pressure: z.number().optional(),
-  altitude: z.number().optional(),
-  angle: z.number().optional(),
-  timestamp: z.number().optional(),
-  status: z.string().optional(),
+  device_id: z.string().nullable().optional(),
+  state: z.string().nullable().optional(),
+  raw_value: z.number().nullable().optional(),
+  value: z.number().nullable().optional(),
+  moisture_percent: z.number().nullable().optional(),
+  temperature: z.number().nullable().optional(),
+  pressure: z.number().nullable().optional(),
+  altitude: z.number().nullable().optional(),
+  angle: z.number().nullable().optional(),
+  timestamp: z.number().nullable().optional(),
+  status: z.string().nullable().optional(),
 }).passthrough()
 export type DeviceState = z.infer<typeof DeviceStateSchema>
 
@@ -214,3 +214,31 @@ export const TriggerResponseSchema = z.object({
   message: z.string(),
 })
 export type TriggerResponse = z.infer<typeof TriggerResponseSchema>
+
+/* Sensor Rules Schemas */
+
+export const RuleConditionSchema = z.object({
+  device: z.string(),
+  property: z.string().optional().default('value'),
+  operator: z.string(),
+  value: z.unknown(),
+})
+export type RuleCondition = z.infer<typeof RuleConditionSchema>
+
+export const RuleActionSchema = z.object({
+  device: z.string(),
+  command: z.string(),
+  args: z.record(z.string(), z.unknown()).optional(),
+})
+export type RuleAction = z.infer<typeof RuleActionSchema>
+
+export const RuleStateSchema = z.object({
+  id: z.string(),
+  enabled: z.boolean(),
+  condition: RuleConditionSchema,
+  actions: z.array(RuleActionSchema),
+  retrigger: z.boolean().optional().default(false),
+  is_triggered: z.boolean().optional().default(false),
+  last_sensor_value: z.unknown().optional().nullable(),
+})
+export type RuleState = z.infer<typeof RuleStateSchema>

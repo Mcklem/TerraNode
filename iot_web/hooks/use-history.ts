@@ -67,7 +67,25 @@ export function useHistory() {
 
   const activeAbortRef = useRef<AbortController | null>(null)
 
-  // Carga inicial de totales de las 5 categorías para actualizar las pestañas
+  const [debouncedDeviceId, setDebouncedDeviceId] = useState('')
+  const [debouncedNodeId, setDebouncedNodeId] = useState('')
+  const [debouncedScheduleId, setDebouncedScheduleId] = useState('')
+  const [debouncedSource, setSourceDebounced] = useState('')
+  const [debouncedTopic, setDebouncedTopic] = useState('')
+
+  // Debounce filter inputs by 300ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedDeviceId(deviceIdFilter)
+      setDebouncedNodeId(nodeIdFilter)
+      setDebouncedScheduleId(scheduleIdFilter)
+      setSourceDebounced(sourceFilter)
+      setDebouncedTopic(topicFilter)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [deviceIdFilter, nodeIdFilter, scheduleIdFilter, sourceFilter, topicFilter])
+
+  // Carga de totales de las 5 categorías para las pestañas
   const loadTotals = useCallback(async (signal?: AbortSignal) => {
     try {
       const [m, a, n, s, e] = await Promise.all([
@@ -102,19 +120,16 @@ export function useHistory() {
     const offset = (page - 1) * limit
 
     try {
-      // Cargar totales generales en segundo plano
-      loadTotals(controller.signal)
-
       if (activeTab === 'measurements') {
-        const res = await fetchMeasurementsHistory(deviceIdFilter || undefined, limit, offset, controller.signal)
+        const res = await fetchMeasurementsHistory(debouncedDeviceId || undefined, limit, offset, controller.signal)
         const records = Array.isArray(res?.data) ? res.data : []
         const total = typeof res?.total === 'number' ? res.total : records.length
         setMeasurementsData({ total, records })
         setTotals((prev) => ({ ...prev, measurements: total }))
       } else if (activeTab === 'actuators') {
         const res = await fetchActuatorsHistory(
-          deviceIdFilter || undefined,
-          sourceFilter || undefined,
+          debouncedDeviceId || undefined,
+          debouncedSource || undefined,
           limit,
           offset,
           controller.signal
@@ -124,15 +139,15 @@ export function useHistory() {
         setActuatorsData({ total, records })
         setTotals((prev) => ({ ...prev, actuators: total }))
       } else if (activeTab === 'nodes') {
-        const res = await fetchNodesHistory(nodeIdFilter || undefined, limit, offset, controller.signal)
+        const res = await fetchNodesHistory(debouncedNodeId || undefined, limit, offset, controller.signal)
         const records = Array.isArray(res?.data) ? res.data : []
         const total = typeof res?.total === 'number' ? res.total : records.length
         setNodesData({ total, records })
         setTotals((prev) => ({ ...prev, nodes: total }))
       } else if (activeTab === 'schedules') {
         const res = await fetchSchedulesHistory(
-          scheduleIdFilter || undefined,
-          deviceIdFilter || undefined,
+          debouncedScheduleId || undefined,
+          debouncedDeviceId || undefined,
           limit,
           offset,
           controller.signal
@@ -142,7 +157,7 @@ export function useHistory() {
         setSchedulesData({ total, records })
         setTotals((prev) => ({ ...prev, schedules: total }))
       } else if (activeTab === 'events') {
-        const res = await fetchEventsHistory(topicFilter || undefined, limit, offset, controller.signal)
+        const res = await fetchEventsHistory(debouncedTopic || undefined, limit, offset, controller.signal)
         const records = Array.isArray(res?.data) ? res.data : []
         const total = typeof res?.total === 'number' ? res.total : records.length
         setEventsData({ total, records })
@@ -155,7 +170,20 @@ export function useHistory() {
     } finally {
       setLoading(false)
     }
-  }, [activeTab, page, limit, deviceIdFilter, nodeIdFilter, scheduleIdFilter, sourceFilter, topicFilter, loadTotals])
+  }, [
+    activeTab,
+    page,
+    limit,
+    debouncedDeviceId,
+    debouncedNodeId,
+    debouncedScheduleId,
+    debouncedSource,
+    debouncedTopic,
+  ])
+
+  useEffect(() => {
+    loadTotals()
+  }, [loadTotals, activeTab])
 
   useEffect(() => {
     loadData()

@@ -16,6 +16,7 @@ import { EventsHistoryTable } from './EventsHistoryTable'
 import { MeasurementsTable } from './MeasurementsTable'
 import { NodesHistoryTable } from './NodesHistoryTable'
 import { SchedulesHistoryTable } from './SchedulesHistoryTable'
+import { TelemetryChart } from './TelemetryChart'
 
 export function HistorySection() {
   const {
@@ -61,6 +62,8 @@ export function HistorySection() {
 
   return (
     <section className="section-block history-section" aria-label="Histórico y Auditoría">
+      <TelemetryChart />
+
       <div className="section-heading">
         <div>
           <p className="eyebrow">PERSISTENT STORAGE / LOGS</p>

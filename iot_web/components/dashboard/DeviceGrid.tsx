@@ -1,13 +1,14 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import type { Device, Mode } from '@/lib/terranode-api'
+import type { Device, Mode, TerraNode } from '@/lib/terranode-api'
 import { DeviceCard } from './DeviceCard'
 
 export type FilterType = 'ALL' | 'ACTUATORS' | 'SENSORS'
 
 interface DeviceGridProps {
   devices: Device[]
+  nodes?: TerraNode[]
   busyId: string
   onCommand: (
     device: Device,
@@ -19,7 +20,7 @@ interface DeviceGridProps {
   onRestore: (id: string) => void
 }
 
-export function DeviceGrid({ devices, busyId, onCommand, onRestore }: DeviceGridProps) {
+export function DeviceGrid({ devices, nodes = [], busyId, onCommand, onRestore }: DeviceGridProps) {
   const [filter, setFilter] = useState<FilterType>('ALL')
 
   const visibleDevices = useMemo(() => {
@@ -55,15 +56,20 @@ export function DeviceGrid({ devices, busyId, onCommand, onRestore }: DeviceGrid
       </div>
 
       <div className="device-grid">
-        {visibleDevices.map((device) => (
-          <DeviceCard
-            key={device.id}
-            device={device}
-            busy={busyId === device.id}
-            onCommand={onCommand}
-            onRestore={onRestore}
-          />
-        ))}
+        {visibleDevices.map((device) => {
+          const matchingNode = nodes.find((n) => n.id === device.node_id)
+          const nodeConnected = matchingNode ? matchingNode.connected && matchingNode.enabled : true
+          return (
+            <DeviceCard
+              key={device.id}
+              device={device}
+              nodeConnected={nodeConnected}
+              busy={busyId === device.id}
+              onCommand={onCommand}
+              onRestore={onRestore}
+            />
+          )
+        })}
       </div>
     </section>
   )

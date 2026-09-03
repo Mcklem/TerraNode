@@ -12,10 +12,12 @@ class SystemContainer:
     def __init__(self):
         self.device_manager: Optional[DeviceManager] = None
         self.node_manager: Optional[NodeManager] = None
+        self.pin_manager: Optional[PinManager] = None
         self.health_monitor: Optional[HealthMonitor] = None
         self.live_command_service: Optional[LiveCommandService] = None
         self.override_registry: Optional[OverrideRegistry] = None
         self.time_scheduler: Optional[Any] = None
+        self.rule_engine: Optional[Any] = None
         self.db: Optional[Database] = None
 
 
@@ -32,6 +34,11 @@ def get_node_manager() -> NodeManager:
     if system_container.node_manager is None:
         raise RuntimeError("NodeManager is not initialized in API container")
     return system_container.node_manager
+
+
+def get_pin_manager() -> Optional[PinManager]:
+    return system_container.pin_manager
+
 
 
 def get_health_monitor() -> Optional[HealthMonitor]:
@@ -54,6 +61,12 @@ def get_time_scheduler() -> Any:
     if system_container.time_scheduler is None:
         raise RuntimeError("TimeScheduler is not initialized in API container")
     return system_container.time_scheduler
+
+
+def get_rule_engine() -> Any:
+    if system_container.rule_engine is None:
+        raise RuntimeError("RuleEngine is not initialized in API container")
+    return system_container.rule_engine
 
 
 def get_database() -> Database:

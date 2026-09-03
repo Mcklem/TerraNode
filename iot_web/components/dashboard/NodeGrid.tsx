@@ -13,24 +13,33 @@ interface NodeCardProps {
 
 function NodeCard({ node, onOpenPinModal }: NodeCardProps) {
   const driverLabel = formatDriverName(node.driver)
+  const isDisconnected = !node.connected || node.status === 'DISCONNECTED'
+
   return (
-    <div className="node-card">
+    <div className={`node-card ${isDisconnected ? 'is-disconnected' : ''}`}>
       <div className="node-card-top">
-        <div className="node-icon" aria-hidden="true">
+        <div
+          className={`node-icon ${
+            isDisconnected
+              ? 'text-destructive border-destructive/50 bg-[#241010]'
+              : ''
+          }`}
+          aria-hidden="true"
+        >
           <Cpu size={20} />
         </div>
         <div>
-          <b>{node.id}</b>
+          <b className={isDisconnected ? 'text-destructive' : ''}>{node.id}</b>
           <span className="node-id">
             {driverLabel} · {node.enabled ? 'ENABLED' : 'DISABLED'}
           </span>
         </div>
         <span
           className={`status-pill ${
-            node.connected ? '' : 'text-destructive'
+            isDisconnected ? 'text-destructive border-destructive/40 bg-destructive/10 font-bold' : ''
           }`}
         >
-          <i className={!node.connected ? 'bg-destructive shadow-none' : ''} />
+          <i className={isDisconnected ? 'bg-destructive shadow-[0_0_8px_var(--destructive)]' : ''} />
           {node.status}
         </span>
       </div>
@@ -48,21 +57,23 @@ function NodeCard({ node, onOpenPinModal }: NodeCardProps) {
         </div>
         <div>
           <span>ESTADO</span>
-          <b>{node.connected ? 'ONLINE' : 'OFFLINE'}</b>
+          <b className={isDisconnected ? 'text-destructive font-bold' : ''}>
+            {isDisconnected ? 'OFFLINE' : 'ONLINE'}
+          </b>
         </div>
       </div>
 
       <div className="loadbar" aria-hidden="true">
         <i
-          className={!node.connected ? 'bg-destructive' : ''}
-          style={{ width: node.connected ? '100%' : '8%' }}
+          className={isDisconnected ? 'bg-destructive shadow-[0_0_8px_var(--destructive)]' : ''}
+          style={{ width: isDisconnected ? '100%' : '100%' }}
         />
       </div>
 
       <button
         type="button"
         className="pin-button"
-        disabled={!node.connected}
+        disabled={isDisconnected}
         onClick={() => onOpenPinModal(node)}
       >
         <SlidersHorizontal size={14} /> Pin directo <ArrowUpRight size={13} />

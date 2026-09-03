@@ -117,13 +117,15 @@ class PaginatedSchedulesHistoryResponse(BaseModel):
 )
 async def get_measurements_history(
     device_id: Optional[str] = Query(None, description="Filtrar por ID específico de sensor (ej. 'ldr_01')"),
+    order: str = Query("desc", description="Orden de clasificación por fecha ('desc' o 'asc')"),
     limit: int = Query(50, ge=1, le=500, description="Cantidad máxima de registros a retornar"),
     offset: int = Query(0, ge=0, description="Número de registros a omitir para paginación"),
     db: Database = Depends(get_database),
 ):
     def _query(session):
         stmt_count = select(func.count(MeasurementModel.id))
-        stmt_data = select(MeasurementModel).order_by(MeasurementModel.timestamp.desc())
+        order_clause = MeasurementModel.timestamp.asc() if order == "asc" else MeasurementModel.timestamp.desc()
+        stmt_data = select(MeasurementModel).order_by(order_clause)
 
         if device_id:
             stmt_count = stmt_count.where(MeasurementModel.device_id == device_id)
@@ -280,3 +282,33 @@ async def get_events_history(
         "offset": offset,
         "data": [EventRecord.model_validate(r) for r in records],
     }
+
+
+@router.post(
+    "/purge",
+    response_model=Dict[str, Any],
+    summary="Purgar datos históricos antiguos",
+    description="Elimina registros de telemetría, eventos, actuadores y ejecuciones de tareas con antigüedad mayor a `retention_days` días.",
+)
+async def purge_history(
+    retention_days: int = Query(30, ge=1, le=365, description="Días de retención histórica a mantener"),
+    db: Database = Depends(get_database),
+):
+    import time
+    from sqlalchemy import delete
+    cutoff = time.time() - (retention_days * 86400)
+
+    def _purge(session):
+        session.execute(delete(MeasurementModel).where(MeasurementModel.timestamp < cutoff))
+        session.execute(delete(EventModel).where(EventModel.timestamp < cutoff))
+        session.execute(delete(ActuatorHistoryModel).where(ActuatorHistoryModel.timestamp < cutoff))
+        session.execute(delete(NodeHistoryModel).where(NodeHistoryModel.timestamp < cutoff))
+        session.execute(delete(ScheduleHistoryModel).where(ScheduleHistoryModel.timestamp < cutoff))
+
+    await db.run_in_session(_purge)
+    return {
+        "success": True,
+        "retention_days": retention_days,
+        "message": f"Registros históricos anteriores a {retention_days} días purgados exitosamente.",
+    }
+

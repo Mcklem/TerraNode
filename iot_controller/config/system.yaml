@@ -214,3 +214,11 @@ schedules:
     interval: 7200                # Ejecutar cada 2 horas (7200s)
     duration: 600                 # Abrir durante 10 minutos (600s)
     run_on_start: true           # Disparar al arrancar la app y luego cada 2 horas
+
+  riego_nocturno_cron:
+    enabled: true
+    device: irrigation_pump
+    command: turn_on
+    stop_command: turn_off
+    cron: "0 22 * * 1,3,5"       # Ejecución por patrón Cron: Lunes, Miércoles y Viernes a las 22:00
+    duration: 300                 # Riego activo durante 5 minutos (300s)

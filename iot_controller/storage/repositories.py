@@ -24,7 +24,7 @@ class StorageManager:
         self.event_bus = event_bus
         self.node_manager = node_manager
         self._running: bool = False
-        self._queue: asyncio.Queue = asyncio.Queue()
+        self._queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
         self._writer_task: Optional[asyncio.Task] = None
         self._logger = get_logger("StorageManager")
 
@@ -40,6 +40,9 @@ class StorageManager:
         self.event_bus.subscribe("node.status_changed", self._on_node_status_changed)
         self.event_bus.subscribe("schedule.triggered", self._on_schedule_event)
         self.event_bus.subscribe("schedule.completed", self._on_schedule_event)
+        self.event_bus.subscribe("override.set", self._on_override_event)
+        self.event_bus.subscribe("override.restored", self._on_override_event)
+        self.event_bus.subscribe("override.expired", self._on_override_event)
         self.event_bus.subscribe("*", self._on_any_event)
 
         self._logger.info("StorageManager started with queued historical SQLAlchemy ORM persistence.")
@@ -55,6 +58,9 @@ class StorageManager:
         self.event_bus.unsubscribe("node.status_changed", self._on_node_status_changed)
         self.event_bus.unsubscribe("schedule.triggered", self._on_schedule_event)
         self.event_bus.unsubscribe("schedule.completed", self._on_schedule_event)
+        self.event_bus.unsubscribe("override.set", self._on_override_event)
+        self.event_bus.unsubscribe("override.restored", self._on_override_event)
+        self.event_bus.unsubscribe("override.expired", self._on_override_event)
         self.event_bus.unsubscribe("*", self._on_any_event)
 
         if self._writer_task:
@@ -105,7 +111,30 @@ class StorageManager:
             source=str(source),
             user_id=str(user_id),
         )
-        await self._queue.put(act_history)
+        try:
+            self._queue.put_nowait(act_history)
+        except asyncio.QueueFull:
+            pass
+
+    async def _on_override_event(self, event: Event) -> None:
+        """Queue override state changes (set, restored, expired) for batch storage in actuator_history."""
+        payload = event.payload
+        device_id = payload.get("device_id", event.sender)
+        mode = payload.get("mode", event.topic.split(".")[-1].upper())
+        source = payload.get("source", "OVERRIDE_REGISTRY")
+        user_id = payload.get("user_id") or source
+
+        act_history = ActuatorHistoryModel(
+            timestamp=event.timestamp,
+            device_id=device_id,
+            state=f"OVERRIDE_{mode}",
+            source=str(source),
+            user_id=str(user_id),
+        )
+        try:
+            self._queue.put_nowait(act_history)
+        except asyncio.QueueFull:
+            pass
 
     async def _on_node_status_changed(self, event: Event) -> None:
         """Queue node connection event for batch storage in node_history table."""

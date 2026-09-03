@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const baseUrl = process.env.TERRANODE_API_URL || 'http://localhost:8000'
-const allowedMethods = new Set(['GET', 'POST'])
+const allowedMethods = new Set(['GET', 'POST', 'DELETE', 'PUT', 'PATCH', 'OPTIONS'])
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   return forward(request, (await params).path)
@@ -9,6 +9,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
   return forward(request, (await params).path)
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  return forward(request, (await params).path)
+}
+
+export async function PUT(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  return forward(request, (await params).path)
+}
+
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
+  return forward(request, (await params).path)
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204 })
 }
 
 async function forward(request: NextRequest, pathParts: string[]) {

@@ -58,6 +58,25 @@ class FirmataNode(BaseNode):
                 )
                 self._board = board
                 self._latency_ms = (time.time() - start_time) * 1000
+
+                # Configure aggressive TCP keepalive on underlying socket
+                if hasattr(board, "sock") and board.sock:
+                    try:
+                        import socket
+                        board.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                        if hasattr(socket, "SIO_KEEPALIVE_VALS"):
+                            # Windows: (on_off, keepalive_time_ms, keepalive_interval_ms) -> 2s idle, 1s interval
+                            board.sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, 2000, 1000))
+                        else:
+                            if hasattr(socket, "TCP_KEEPIDLE"):
+                                board.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 2)
+                            if hasattr(socket, "TCP_KEEPINTVL"):
+                                board.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 1)
+                            if hasattr(socket, "TCP_KEEPCNT"):
+                                board.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 2)
+                    except Exception as ke:
+                        self._logger.debug(f"Could not apply socket keepalive: {ke}")
+
                 self._mark_connected()
                 self._logger.info(f"Successfully connected to Node {self.id} (latency: {self._latency_ms:.1f}ms).")
                 return True
@@ -106,6 +125,71 @@ class FirmataNode(BaseNode):
         await self.disconnect()
         await asyncio.sleep(1.0)
         return await self.connect()
+
+    async def probe_connection(self) -> bool:
+        """Active thread-safe socket health check for FirmataNode."""
+        if not self.enabled or not self._board:
+            if self.is_connected():
+                self._mark_disconnected("Board missing or disabled")
+            return False
+
+        # If Pymata4 already flagged shutdown or thread exit, mark disconnected
+        if getattr(self._board, "shutdown_flag", False):
+            self._mark_disconnected("Board shutdown flag is set")
+            return False
+
+        import select
+        import socket
+
+        def _check_socket():
+            board = self._board
+            if not board:
+                return False
+
+            sock = getattr(board, "sock", None)
+            if not sock and hasattr(board, "transport"):
+                sock = getattr(board.transport, "sock", None) or getattr(board.transport, "_sock", None)
+
+            if not sock:
+                return False
+
+            try:
+                # 1. Check socket error status from OS TCP stack
+                err = sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+                if err != 0:
+                    return False
+
+                # 2. Check if socket receives EOF (FIN packet received)
+                r, _, _ = select.select([sock], [], [], 0)
+                if r:
+                    peek = sock.recv(1, socket.MSG_PEEK)
+                    if not peek:  # Empty bytes indicates connection closed / EOF
+                        return False
+
+                # 3. Active Firmata query ping using Pymata4 thread lock
+                lock = getattr(board, "the_send_sysex_lock", None)
+                if lock:
+                    with lock:
+                        sock.sendall(bytes([0xF9]))
+                else:
+                    sock.sendall(bytes([0xF9]))
+
+                return True
+            except Exception:
+                return False
+
+        loop = asyncio.get_running_loop()
+        try:
+            alive = await asyncio.wait_for(loop.run_in_executor(None, _check_socket), timeout=1.0)
+            if not alive:
+                self._logger.warning(f"Node '{self.id}' ({self.host}:{self.port}) socket probe failed. Marking DISCONNECTED.")
+                self._mark_disconnected("Active TCP probe failed (node powered off or network drop)")
+                return False
+            return True
+        except Exception as e:
+            self._logger.warning(f"Node '{self.id}' probe exception: {e}")
+            self._mark_disconnected(f"Probe exception: {e}")
+            return False
 
     def set_pin_mode_digital_output(self, pin: Union[str, int]) -> None:
         pin_num = parse_pin(pin)
