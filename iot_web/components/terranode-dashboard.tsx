@@ -7,6 +7,7 @@ import { Header } from './dashboard/Header'
 import { HealthGrid } from './dashboard/HealthGrid'
 import { NodeGrid } from './dashboard/NodeGrid'
 import { OverrideList } from './dashboard/OverrideList'
+import { ScheduleGrid } from './dashboard/ScheduleGrid'
 import { HistorySection } from './dashboard/history/HistorySection'
 import { ToastNotification } from './dashboard/ToastNotification'
 
@@ -16,6 +17,7 @@ export default function TerraNodeDashboard() {
     nodes,
     devices,
     overrides,
+    schedules,
     loading,
     isRefreshing,
     error,
@@ -25,6 +27,8 @@ export default function TerraNodeDashboard() {
     refresh,
     executeDeviceCommand,
     restoreDeviceControl,
+    triggerScheduleAction,
+    toggleScheduleAction,
     executeRawPinCommand,
     restoreAllOverrides,
   } = useTerraNode(4000)
@@ -81,6 +85,14 @@ export default function TerraNodeDashboard() {
           busyId={busyId}
           onCommand={executeDeviceCommand}
           onRestore={restoreDeviceControl}
+        />
+
+        <ScheduleGrid
+          schedules={schedules}
+          busyId={busyId}
+          onTrigger={triggerScheduleAction}
+          onToggle={toggleScheduleAction}
+          onRefresh={refresh}
         />
 
         <OverrideList

@@ -166,3 +166,51 @@ export const PaginatedEventsSchema = z.object({
   data: z.array(EventRecordSchema),
 })
 export type PaginatedEvents = z.infer<typeof PaginatedEventsSchema>
+
+export const ScheduleHistoryRecordSchema = z.object({
+  id: z.number(),
+  timestamp: z.number(),
+  schedule_id: z.string(),
+  device_id: z.string(),
+  action: z.string(),
+  event_type: z.string(),
+  duration: z.number().nullable().optional(),
+  status: z.string(),
+})
+export type ScheduleHistoryRecord = z.infer<typeof ScheduleHistoryRecordSchema>
+
+export const PaginatedSchedulesHistorySchema = z.object({
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+  data: z.array(ScheduleHistoryRecordSchema),
+})
+export type PaginatedSchedulesHistory = z.infer<typeof PaginatedSchedulesHistorySchema>
+
+/* Active Schedule Schemas */
+
+export const ScheduleStateSchema = z.object({
+  id: z.string(),
+  enabled: z.boolean(),
+  device: z.string(),
+  command: z.string(),
+  args: z.record(z.string(), z.unknown()).optional(),
+  stop_command: z.string().nullable().optional(),
+  stop_args: z.record(z.string(), z.unknown()).optional(),
+  duration_seconds: z.number().optional().default(0),
+  is_duration_active: z.boolean().optional().default(false),
+  run_on_start: z.boolean().optional().default(false),
+  time: z.string().nullable().optional(),
+  interval: z.number().nullable().optional(),
+  cron: z.string().nullable().optional(),
+  days: z.array(z.string()).nullable().optional(),
+  last_run_timestamp: z.number().nullable().optional(),
+})
+export type ScheduleState = z.infer<typeof ScheduleStateSchema>
+
+export const TriggerResponseSchema = z.object({
+  success: z.boolean(),
+  schedule_id: z.string(),
+  message: z.string(),
+})
+export type TriggerResponse = z.infer<typeof TriggerResponseSchema>

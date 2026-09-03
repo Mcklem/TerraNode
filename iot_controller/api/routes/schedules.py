@@ -11,9 +11,12 @@ class ScheduleStateResponse(BaseModel):
     enabled: bool = Field(..., description="Indica si la programación está activa")
     device: str = Field(..., description="ID del actuador objetivo (ej. 'irrigation_pump')")
     command: str = Field(..., description="Comando de inicio a ejecutar (ej. 'turn_on', 'set_position')")
+    args: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Parámetros del comando de inicio")
     stop_command: Optional[str] = Field(None, description="Comando de parada a ejecutar tras vencer la duración")
+    stop_args: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Parámetros del comando de parada")
     duration_seconds: float = Field(0, description="Duración activa en segundos")
     is_duration_active: bool = Field(False, description="True si la tarea se encuentra actualmente dentro del periodo activo de duración")
+    run_on_start: bool = Field(False, description="Indica si la tarea se dispara inmediatamente al arrancar la app")
     time: Optional[str] = Field(None, description="Hora de ejecución diaria 'HH:MM'")
     interval: Optional[float] = Field(None, description="Frecuencia de intervalo en segundos")
     cron: Optional[str] = Field(None, description="Expresión cron de 5 campos")
@@ -27,9 +30,12 @@ class ScheduleStateResponse(BaseModel):
                 "enabled": True,
                 "device": "irrigation_pump",
                 "command": "turn_on",
+                "args": {},
                 "stop_command": "turn_off",
+                "stop_args": {},
                 "duration_seconds": 900,
                 "is_duration_active": False,
+                "run_on_start": True,
                 "time": "08:00",
                 "interval": None,
                 "cron": None,
@@ -50,10 +56,30 @@ class TriggerResponse(BaseModel):
     "",
     response_model=List[ScheduleStateResponse],
     summary="Listar tareas programadas por tiempo/calendario",
-    description="Retorna el listado completo de tareas programadas temporales registradas en `TimeScheduler`, mostrando su frecuencia, hora de ejecución, estado y tiempo activo.",
+    description="Retorna el listado completo de tareas programadas temporales registradas en `TimeScheduler` y configuradas en `settings`, mostrando su frecuencia, hora de ejecución, parámetros, estado y tiempo activo.",
 )
 async def list_schedules(time_scheduler: Any = Depends(get_time_scheduler)):
     return time_scheduler.get_schedule_states()
+
+
+@router.get(
+    "/{schedule_id}",
+    response_model=ScheduleStateResponse,
+    summary="Obtener detalles de una tarea programada específica",
+    description="Retorna la información completa de configuración y estado en tiempo real de una tarea programada por su ID.",
+    responses={
+        404: {"description": "Programación no encontrada en la configuración activa."}
+    }
+)
+async def get_schedule_detail(
+    schedule_id: str,
+    time_scheduler: Any = Depends(get_time_scheduler),
+):
+    states = time_scheduler.get_schedule_states()
+    for sched in states:
+        if sched["id"] == schedule_id:
+            return sched
+    raise HTTPException(status_code=404, detail=f"Schedule '{schedule_id}' not found in active settings")
 
 
 @router.post(

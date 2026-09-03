@@ -149,6 +149,12 @@ class TestTimeScheduler(unittest.IsolatedAsyncioTestCase):
         schedules = resp.json()
         self.assertEqual(len(schedules), 2)
 
+        # GET /api/v1/schedules/irrigation_job (Detail)
+        detail_resp = self.client.get("/api/v1/schedules/irrigation_job")
+        self.assertEqual(detail_resp.status_code, 200)
+        self.assertEqual(detail_resp.json()["device"], "pump_01")
+        self.assertEqual(detail_resp.json()["command"], "turn_on")
+
         # POST /api/v1/schedules/irrigation_job/trigger
         trig_resp = self.client.post("/api/v1/schedules/irrigation_job/trigger")
         self.assertEqual(trig_resp.status_code, 200)
