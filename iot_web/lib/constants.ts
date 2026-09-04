@@ -23,6 +23,7 @@ export enum DeviceStatusEnum {
 export enum DeviceTypeEnum {
   RELAY = 'relay',
   SERVO = 'servo',
+  LED = 'led',
   SOIL_MOISTURE = 'soil_moisture',
   BMP180 = 'bmp180',
   LDR = 'ldr',

@@ -36,9 +36,13 @@ export const DeviceStateSchema = z.object({
 }).passthrough()
 export type DeviceState = z.infer<typeof DeviceStateSchema>
 
+export const DeviceCategorySchema = z.enum(['sensor', 'actuator'])
+export type DeviceCategory = z.infer<typeof DeviceCategorySchema>
+
 export const DeviceSchema = z.object({
   id: z.string(),
   type: z.string(),
+  category: z.enum(['sensor', 'actuator']).optional().default('sensor'),
   node_id: z.string(),
   status: DeviceStatusSchema,
   control_mode: ControlModeSchema,
@@ -46,6 +50,14 @@ export const DeviceSchema = z.object({
   current_state: DeviceStateSchema,
 })
 export type Device = z.infer<typeof DeviceSchema>
+
+export function isSensor(device: Device): boolean {
+  return device.category === 'sensor'
+}
+
+export function isActuator(device: Device): boolean {
+  return device.category === 'actuator'
+}
 
 export const HealthSchema = z.object({
   status: z.string().optional().default('OK'),

@@ -17,6 +17,8 @@ import {
   ScheduleStateSchema,
   RuleStateSchema,
   TriggerResponseSchema,
+  isSensor,
+  isActuator,
   type Mode,
   type DeviceStatus,
   type NodeStatus,
@@ -37,6 +39,8 @@ import {
   type RuleState,
   type TriggerResponse,
 } from './schemas'
+
+export { isSensor, isActuator }
 
 export type {
   Mode,

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import type { Device, Mode, TerraNode } from '@/lib/terranode-api'
+import { isActuator, type Device, type Mode, type TerraNode } from '@/lib/terranode-api'
 import { DeviceCard } from './DeviceCard'
 
 export type FilterType = 'ALL' | 'ACTUATORS' | 'SENSORS'
@@ -26,8 +26,8 @@ export function DeviceGrid({ devices, nodes = [], busyId, onCommand, onRestore }
   const visibleDevices = useMemo(() => {
     return devices.filter((d) => {
       if (filter === 'ALL') return true
-      const isActuator = d.type === 'relay' || d.type === 'servo' || d.type === 'led'
-      return filter === 'ACTUATORS' ? isActuator : !isActuator
+      const actuator = isActuator(d)
+      return filter === 'ACTUATORS' ? actuator : !actuator
     })
   }, [devices, filter])
 

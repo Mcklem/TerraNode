@@ -15,6 +15,10 @@ class Sensor(BaseDevice):
         self._last_value: Optional[Any] = None
         self._last_timestamp: Optional[float] = None
 
+    @property
+    def category(self) -> str:
+        return "sensor"
+
     @abstractmethod
     async def read(self) -> Dict[str, Any]:
         """Perform sensor reading and return normalized state."""

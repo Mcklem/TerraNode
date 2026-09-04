@@ -5,6 +5,7 @@ import { Download, TrendingUp, RefreshCw, Activity } from 'lucide-react'
 import {
   fetchDevices,
   fetchMeasurementsHistory,
+  isSensor,
   type Device,
   type MeasurementRecord,
 } from '@/lib/terranode-api'
@@ -39,7 +40,7 @@ export function TelemetryChart() {
 
       // Add remaining registered sensor devices
       devs.forEach((d) => {
-        if (d.type !== 'relay' && d.type !== 'servo') {
+        if (isSensor(d)) {
           sensorSet.add(d.id)
         }
       })
