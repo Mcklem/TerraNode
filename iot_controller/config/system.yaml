@@ -103,7 +103,7 @@ nodes:
     driver: secure_standard_firmata_wifi
     auth_key: CFNQvkNfttUdekyjAct0
     use_tls: false
-    host: 192.168.1.37
+    host: 192.168.1.107
     port: 3030
     enabled: true
     arduino_wait: 5
@@ -119,14 +119,21 @@ nodes:
           wet: 350
 
   weather_01:
-    driver: standard_firmata_wifi
-    host: 192.168.1.107
+    driver: secure_standard_firmata_wifi
+    auth_key: iujeF96FzpEUepUGq6PD
+    use_tls: false
+    host: 192.168.1.37
     port: 3030
     enabled: true
     arduino_wait: 5
     max_retries: 3
     timeout: 12
     devices:
+      builtin_led:
+        type: led
+        pin: D0
+        active_low: true
+
       light_01:
         type: ldr
         pin: A0

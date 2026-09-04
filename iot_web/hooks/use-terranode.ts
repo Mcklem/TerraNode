@@ -136,7 +136,7 @@ export function useTerraNode(pollIntervalMs = 2000) {
 
     const computedTargetMode =
       targetMode ||
-      (device.type === 'relay'
+      (device.type === 'relay' || device.type === 'led'
         ? action === 'turn_on'
           ? 'MANUAL_ON'
           : 'MANUAL_OFF'

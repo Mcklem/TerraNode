@@ -6,7 +6,7 @@ export type Mode = z.infer<typeof ControlModeSchema>
 export const NodeStatusSchema = z.enum(['CONNECTED', 'DISCONNECTED', 'RECONNECTING', 'ERROR'])
 export type NodeStatus = z.infer<typeof NodeStatusSchema>
 
-export const DeviceStatusSchema = z.enum(['OK', 'ERROR', 'DISCONNECTED'])
+export const DeviceStatusSchema = z.enum(['INITIALIZING', 'OK', 'WARNING', 'ERROR', 'DISCONNECTED'])
 export type DeviceStatus = z.infer<typeof DeviceStatusSchema>
 
 export const NodeInfoSchema = z.object({

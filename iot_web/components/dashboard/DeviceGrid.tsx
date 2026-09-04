@@ -26,7 +26,7 @@ export function DeviceGrid({ devices, nodes = [], busyId, onCommand, onRestore }
   const visibleDevices = useMemo(() => {
     return devices.filter((d) => {
       if (filter === 'ALL') return true
-      const isActuator = d.type === 'relay' || d.type === 'servo'
+      const isActuator = d.type === 'relay' || d.type === 'servo' || d.type === 'led'
       return filter === 'ACTUATORS' ? isActuator : !isActuator
     })
   }, [devices, filter])

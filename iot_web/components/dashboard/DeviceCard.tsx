@@ -36,6 +36,8 @@ const iconFor = (type: string) => {
   switch (type) {
     case 'relay':
       return Zap
+    case 'led':
+      return Lightbulb
     case 'servo':
       return Compass
     case 'soil_moisture':
@@ -59,7 +61,7 @@ const TTL_OPTIONS = [
 
 export function DeviceCard({ device, nodeConnected = true, onCommand, onRestore, busy }: DeviceCardProps) {
   const Icon = iconFor(device.type)
-  const isRelay = device.type === 'relay'
+  const isRelay = device.type === 'relay' || device.type === 'led'
   const isServo = device.type === 'servo'
 
   const isDisconnected = device.status === 'DISCONNECTED' || !nodeConnected

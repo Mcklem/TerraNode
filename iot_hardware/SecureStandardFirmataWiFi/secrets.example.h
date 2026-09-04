@@ -19,4 +19,8 @@
 // Network Hostname reported to WiFi Router / DHCP
 #define SECRET_NODE_HOSTNAME "terranode-soil-01"
 
+// Optional Hardware TLS/SSL Socket Encryption (0 = Disabled / Pure TCP + Sysex Auth, 1 = BearSSL TLS)
+// Keep as 0 for NodeMCU ESP8266 to save 30KB RAM and prevent watchdog timeouts
+#define USE_TLS_SECURITY 0
+
 #endif // SECRETS_H

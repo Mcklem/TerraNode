@@ -29,6 +29,16 @@
   #define SECRET_NODE_HOSTNAME "terranode-node"
 #endif
 
+#ifndef USE_TLS_SECURITY
+  #define USE_TLS_SECURITY 0
+#endif
+
+#if USE_TLS_SECURITY == 1
+  #define IS_TLS_ENABLED 1
+#else
+  #define IS_TLS_ENABLED 0
+#endif
+
 // Node Unique Authentication Key & Hostname
 const char node_auth_key[] = SECRET_NODE_AUTH_KEY;
 const char node_hostname[] = SECRET_NODE_HOSTNAME;

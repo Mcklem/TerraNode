@@ -13,7 +13,9 @@ export enum NodeStatusEnum {
 }
 
 export enum DeviceStatusEnum {
+  INITIALIZING = 'INITIALIZING',
   OK = 'OK',
+  WARNING = 'WARNING',
   ERROR = 'ERROR',
   DISCONNECTED = 'DISCONNECTED',
 }

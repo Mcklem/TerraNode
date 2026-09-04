@@ -52,14 +52,25 @@ class SecureFirmataNode(FirmataNode):
         # Wrap underlying socket with TLS/SSL if enabled
         if self.use_tls and hasattr(self._board, "sock") and self._board.sock:
             try:
+                sock = self._board.sock
+                orig_timeout = sock.gettimeout()
+                sock.settimeout(3.0)
+
                 ssl_ctx = ssl.create_default_context()
                 ssl_ctx.check_hostname = False
                 ssl_ctx.verify_mode = ssl.CERT_NONE
-                self._board.sock = ssl_ctx.wrap_socket(self._board.sock, server_hostname=self.host)
+
+                self._board.sock = ssl_ctx.wrap_socket(sock, server_hostname=self.host)
+                self._board.sock.settimeout(orig_timeout)
                 self._logger.info(f"TLS tunnel established for SecureNode '{self.id}'.")
             except Exception as se:
-                err_msg = f"TLS_ERROR: Failed to wrap socket with TLS for SecureNode '{self.id}': {se}"
+                err_msg = f"TLS_ERROR: Handshake failed/timed out for SecureNode '{self.id}': {se}"
                 self._logger.error(err_msg)
+                self._logger.error(
+                    f"[TLS DIAGNOSTIC HINT] Microcontroller at {self.host}:{self.port} did not complete TLS handshake. "
+                    "ESP8266 WiFiServerStream operates on plain TCP with Sysex Node Key Auth. "
+                    "Set 'use_tls: false' in system.yaml for standard ESP8266 Firmata WiFi connections."
+                )
                 self._mark_disconnected(reason=err_msg)
                 await self.disconnect()
                 return False
