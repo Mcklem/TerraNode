@@ -22,6 +22,45 @@ def _safe_analog_message(self, data):
 
 pymata4.Pymata4._analog_message = _safe_analog_message
 
+# Safe monkey-patch for Pymata4 _tcp_receiver to handle remote socket FIN (b"") without 100% CPU spinning
+def _safe_tcp_receiver(self):
+    self.run_event.wait()
+    while self._is_running() and not self.shutdown_flag:
+        try:
+            if not getattr(self, "sock", None):
+                break
+            payload = self.sock.recv(1)
+            if not payload:
+                # Socket closed by remote host (0 bytes returned)
+                self.shutdown_flag = True
+                break
+            self.the_deque.append(ord(payload))
+        except Exception:
+            self.shutdown_flag = True
+            break
+
+
+pymata4.Pymata4._tcp_receiver = _safe_tcp_receiver
+
+
+# Safe monkey-patch for Pymata4 _reporter to prevent thread crash on unknown sysex or unhandled bytes
+_orig_reporter = pymata4.Pymata4._reporter
+
+
+def _safe_reporter(self):
+    self.run_event.wait()
+    while self._is_running() and not self.shutdown_flag:
+        if len(self.the_deque):
+            try:
+                _orig_reporter(self)
+            except Exception:
+                time.sleep(0.01)
+        else:
+            time.sleep(self.sleep_tune)
+
+
+pymata4.Pymata4._reporter = _safe_reporter
+
 
 class FirmataNode(BaseNode):
     """Pymata4 / StandardFirmataWiFi node implementation."""
@@ -31,6 +70,7 @@ class FirmataNode(BaseNode):
         self._board: Optional[pymata4.Pymata4] = None
         self._logger = get_logger("FirmataNode", node_id=self.id)
         self._i2c_initialized = False
+        self._heartbeat_task: Optional[asyncio.Task] = None
 
     async def connect(self) -> bool:
         if not self.enabled:
@@ -79,6 +119,9 @@ class FirmataNode(BaseNode):
 
                 self._mark_connected()
                 self._logger.info(f"Successfully connected to Node {self.id} (latency: {self._latency_ms:.1f}ms).")
+                
+                # Start active MCU watchdog heartbeat ping loop
+                self._start_heartbeat()
                 return True
             except Exception as e:
                 err_str = str(e)
@@ -105,10 +148,43 @@ class FirmataNode(BaseNode):
                     return False
         return False
 
+    def _start_heartbeat(self) -> None:
+        self._stop_heartbeat()
+        self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+
+    def _stop_heartbeat(self) -> None:
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            self._heartbeat_task = None
+
+    async def _heartbeat_loop(self) -> None:
+        """Periodic background heartbeat sending light Sysex ping every 2.0s to update MCU watchdog."""
+        while self.is_connected() and self._board:
+            try:
+                board = self._board
+                if board and hasattr(board, "_send_sysex"):
+                    board._send_sysex(0x7A, [19 & 0x7F, (19 >> 7) & 0x7F])
+            except Exception:
+                pass
+            try:
+                await asyncio.sleep(2.0)
+            except asyncio.CancelledError:
+                break
+
     async def disconnect(self) -> None:
+        self._stop_heartbeat()
         if self._board:
             self._logger.info(f"Disconnecting Node {self.id}...")
             try:
+                # Explicitly shutdown and close OS socket so ESP8266 receives TCP FIN packet immediately
+                sock = getattr(self._board, "sock", None)
+                if sock:
+                    try:
+                        import socket
+                        sock.shutdown(socket.SHUT_RDWR)
+                        sock.close()
+                    except Exception:
+                        pass
                 loop = asyncio.get_running_loop()
                 await loop.run_in_executor(None, self._board.shutdown)
             except Exception as e:
@@ -123,73 +199,52 @@ class FirmataNode(BaseNode):
         self._status = NodeStatus.RECONNECTING
         self._logger.info(f"Attempting reconnection {self._reconnect_count} for Node {self.id}...")
         await self.disconnect()
-        await asyncio.sleep(1.0)
+        # Pause 2.5s to allow microcontrollers (ESP8266/MKR1000) WiFiServerStream to clear old socket state
+        await asyncio.sleep(2.5)
         return await self.connect()
 
     async def probe_connection(self) -> bool:
-        """Active thread-safe socket health check for FirmataNode."""
+        """Non-disruptive, thread-safe health check for FirmataNode."""
         if not self.enabled or not self._board:
             if self.is_connected():
                 self._mark_disconnected("Board missing or disabled")
             return False
 
-        # If Pymata4 already flagged shutdown or thread exit, mark disconnected
-        if getattr(self._board, "shutdown_flag", False):
-            self._mark_disconnected("Board shutdown flag is set")
+        board = self._board
+
+        # 1. Check if Pymata4 flagged shutdown
+        if getattr(board, "shutdown_flag", False):
+            self._mark_disconnected("Pymata4 board shutdown flag is set")
             return False
 
-        import select
-        import socket
+        # 2. Check if Pymata4 background threads are running
+        rx_thread = getattr(board, "the_data_receive_thread", None)
+        rep_thread = getattr(board, "the_reporter_thread", None)
+        if rx_thread and not rx_thread.is_alive():
+            self._mark_disconnected("Pymata4 receive thread died")
+            return False
+        if rep_thread and not rep_thread.is_alive():
+            self._mark_disconnected("Pymata4 reporter thread died")
+            return False
 
-        def _check_socket():
-            board = self._board
-            if not board:
-                return False
+        # 3. Check underlying OS socket file descriptor validity
+        sock = getattr(board, "sock", None)
+        if not sock or getattr(sock, "fileno", lambda: -1)() == -1:
+            self._mark_disconnected("Underlying TCP socket is closed")
+            return False
 
-            sock = getattr(board, "sock", None)
-            if not sock and hasattr(board, "transport"):
-                sock = getattr(board.transport, "sock", None) or getattr(board.transport, "_sock", None)
-
-            if not sock:
-                return False
-
-            try:
-                # 1. Check socket error status from OS TCP stack
-                err = sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
-                if err != 0:
-                    return False
-
-                # 2. Check if socket receives EOF (FIN packet received)
-                r, _, _ = select.select([sock], [], [], 0)
-                if r:
-                    peek = sock.recv(1, socket.MSG_PEEK)
-                    if not peek:  # Empty bytes indicates connection closed / EOF
-                        return False
-
-                # 3. Active Firmata query ping using Pymata4 thread lock
-                lock = getattr(board, "the_send_sysex_lock", None)
-                if lock:
-                    with lock:
-                        sock.sendall(bytes([0xF9]))
-                else:
-                    sock.sendall(bytes([0xF9]))
-
-                return True
-            except Exception:
-                return False
-
-        loop = asyncio.get_running_loop()
+        # 4. Check socket error option from OS without invoking recv/select
         try:
-            alive = await asyncio.wait_for(loop.run_in_executor(None, _check_socket), timeout=1.0)
-            if not alive:
-                self._logger.warning(f"Node '{self.id}' ({self.host}:{self.port}) socket probe failed. Marking DISCONNECTED.")
-                self._mark_disconnected("Active TCP probe failed (node powered off or network drop)")
+            import socket
+            err = sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR)
+            if err != 0:
+                self._mark_disconnected(f"Socket OS error: {err}")
                 return False
-            return True
         except Exception as e:
-            self._logger.warning(f"Node '{self.id}' probe exception: {e}")
-            self._mark_disconnected(f"Probe exception: {e}")
+            self._mark_disconnected(f"Socket check error: {e}")
             return False
+
+        return True
 
     def set_pin_mode_digital_output(self, pin: Union[str, int]) -> None:
         pin_num = parse_pin(pin)

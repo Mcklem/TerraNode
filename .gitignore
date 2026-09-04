@@ -1,0 +1,27 @@
+# Security & Secrets
+**/secrets.h
+secrets.h
+!**/secrets.example.h
+!secrets.example.h
+.env
+.env.local
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.db
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node.js & Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+.vercel
+*.log

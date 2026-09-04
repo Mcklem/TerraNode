@@ -4,6 +4,15 @@ from enum import Enum
 from typing import Any, Dict, Optional, Union
 
 
+class NodeDriver(str, Enum):
+    STANDARD_FIRMATA_WIFI = "standard_firmata_wifi"
+    SECURE_STANDARD_FIRMATA_WIFI = "secure_standard_firmata_wifi"
+    STANDARD_FIRMATA = "standard_firmata"
+    SECURE_FIRMATA = "secure_firmata"
+    FIRMATA = "firmata"
+    MOCK = "mock"
+
+
 class NodeStatus(str, Enum):
     CONNECTED = "CONNECTED"
     DISCONNECTED = "DISCONNECTED"

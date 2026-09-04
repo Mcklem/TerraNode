@@ -31,16 +31,28 @@ export enum RawCommandTypeEnum {
   ANALOG_WRITE = 'analog_write',
 }
 
+export enum NodeDriverEnum {
+  STANDARD_FIRMATA_WIFI = 'standard_firmata_wifi',
+  SECURE_STANDARD_FIRMATA_WIFI = 'secure_standard_firmata_wifi',
+  STANDARD_FIRMATA = 'standard_firmata',
+  SECURE_FIRMATA = 'secure_firmata',
+  FIRMATA = 'firmata',
+  MOCK = 'mock',
+}
+
 export const DRIVER_DISPLAY_NAMES: Record<string, string> = {
-  standard_firmata: 'StandardFirmata',
-  standard_firmata_wifi: 'StandardFirmataWiFi',
-  mock: 'Mock NodeMCU Simulation',
+  [NodeDriverEnum.STANDARD_FIRMATA_WIFI]: 'StandardFirmataWiFi',
+  [NodeDriverEnum.SECURE_STANDARD_FIRMATA_WIFI]: 'SecureStandardFirmataWiFi',
+  [NodeDriverEnum.STANDARD_FIRMATA]: 'StandardFirmata',
+  [NodeDriverEnum.SECURE_FIRMATA]: 'SecureFirmata',
+  [NodeDriverEnum.FIRMATA]: 'StandardFirmataWiFi',
+  [NodeDriverEnum.MOCK]: 'Mock NodeMCU',
 }
 
 export function formatDriverName(driver: string): string {
   if (!driver) return 'StandardFirmataWiFi'
   const key = driver.toLowerCase().trim()
-  return DRIVER_DISPLAY_NAMES[key] || driver.toUpperCase()
+  return DRIVER_DISPLAY_NAMES[key] || driver
 }
 
 export function formatControlModeLabel(mode: string): string {

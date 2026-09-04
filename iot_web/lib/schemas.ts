@@ -17,6 +17,7 @@ export const NodeInfoSchema = z.object({
   port: z.number(),
   enabled: z.boolean(),
   status: NodeStatusSchema,
+  last_error: z.string().nullable().optional(),
 })
 export type TerraNode = z.infer<typeof NodeInfoSchema>
 

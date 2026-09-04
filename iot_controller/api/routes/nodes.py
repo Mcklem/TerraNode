@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, ConfigDict
 from api.dependencies import get_node_manager, get_live_command_service, get_pin_manager
 from core.node_manager import NodeManager
@@ -58,6 +58,7 @@ class NodeInfoResponse(BaseModel):
     port: int = Field(..., description="Puerto TCP de comunicación")
     enabled: bool = Field(..., description="Indica si el nodo está habilitado en la configuración")
     status: str = Field(..., description="Estado operativo ('CONNECTED', 'DISCONNECTED', 'RECONNECTING', 'ERROR')")
+    last_error: Optional[str] = Field(None, description="Último mensaje de error de conexión o seguridad registrado")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -68,7 +69,8 @@ class NodeInfoResponse(BaseModel):
                 "host": "192.168.1.150",
                 "port": 3030,
                 "enabled": True,
-                "status": "CONNECTED"
+                "status": "CONNECTED",
+                "last_error": None
             }
         }
     )
@@ -91,6 +93,7 @@ async def list_nodes(node_mgr: NodeManager = Depends(get_node_manager)):
             "port": node.port,
             "enabled": node.enabled,
             "status": node.status.value,
+            "last_error": getattr(node, "_last_error", None),
         })
     return result
 
@@ -116,6 +119,7 @@ async def get_node_details(node_id: str, node_mgr: NodeManager = Depends(get_nod
         "port": node.port,
         "enabled": node.enabled,
         "status": node.status.value,
+        "last_error": getattr(node, "_last_error", None),
     }
 
 

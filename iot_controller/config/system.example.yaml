@@ -15,7 +15,9 @@
 # ------------------------------------------------------------------------------
 # 2. NODES SECTION:
 #    Each key represents a NodeMCU ESP8266 or Mock hardware node.
-#    - driver: "firmata" / "standard_firmata_wifi" (physical ESP8266 WiFi) or "mock" (simulation).
+#    - driver: "firmata" / "standard_firmata_wifi" (legacy unencrypted) or "secure_standard_firmata_wifi" (secure with auth_key and optional TLS).
+#    - auth_key: Unique node secret key matching 'NODE_AUTH_KEY' flashed in SecureStandardFirmataWiFi microcontrollers.
+#    - use_tls: True/False to enable TLS encrypted socket tunnel (default: false).
 #    - host: IP address of the NodeMCU board (e.g. 192.168.1.37).
 #    - port: TCP socket port (default: 3030).
 #    - enabled: True/False to activate or bypass the node.
@@ -98,9 +100,11 @@ system:
 
 nodes:
   weather_01:
-    driver: standard_firmata_wifi
+    driver: secure_standard_firmata_wifi
     host: 192.168.1.37
     port: 3030
+    auth_key: "weather_01_unique_secure_key_12345"
+    use_tls: false
     enabled: true
     arduino_wait: 5
     max_retries: 3
@@ -118,7 +122,7 @@ nodes:
         poll_interval: 60
 
   irrigation_01:
-    driver: firmata
+    driver: standard_firmata_wifi
     host: 192.168.1.38
     port: 3030
     enabled: true
