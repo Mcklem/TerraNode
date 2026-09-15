@@ -31,6 +31,12 @@ class BaseDevice(ABC):
             return DeviceStatus.DISCONNECTED
         return self._status
 
+    @property
+    @abstractmethod
+    def category(self) -> str:
+        """Return the device category ('sensor' or 'actuator')."""
+        pass
+
     def set_status(self, status: DeviceStatus, error: Optional[str] = None) -> None:
         self._status = status
         if error:

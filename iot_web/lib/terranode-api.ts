@@ -17,6 +17,8 @@ import {
   ScheduleStateSchema,
   RuleStateSchema,
   TriggerResponseSchema,
+  isSensor,
+  isActuator,
   type Mode,
   type DeviceStatus,
   type NodeStatus,
@@ -37,6 +39,8 @@ import {
   type RuleState,
   type TriggerResponse,
 } from './schemas'
+
+export { isSensor, isActuator }
 
 export type {
   Mode,
@@ -241,7 +245,7 @@ export const fetchEventsHistory = (
 
 export const deviceValue = (device: Device): string => {
   const state = device.current_state
-  if (device.type === 'relay') {
+  if (device.type === 'relay' || device.type === 'led') {
     return state.state ?? '—'
   }
   if (device.type === 'servo') {
@@ -290,7 +294,7 @@ export const getDeviceMetrics = (device: Device): Array<{ label: string; value: 
 }
 
 export const deviceAction = (device: Device): string => {
-  if (device.type === 'relay') {
+  if (device.type === 'relay' || device.type === 'led') {
     return device.current_state.state === 'ON' ? 'turn_off' : 'turn_on'
   }
   return 'set_position'

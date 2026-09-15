@@ -5,6 +5,7 @@ from devices.sensors.bmp180 import BMP180Sensor
 from devices.sensors.soil_moisture import SoilMoistureSensor
 from devices.actuators.relay import RelayActuator
 from devices.actuators.servo import ServoActuator
+from devices.actuators.led import LedActuator
 
 
 class DeviceRegistry:
@@ -17,6 +18,7 @@ class DeviceRegistry:
             "soil_moisture": SoilMoistureSensor,
             "relay": RelayActuator,
             "servo": ServoActuator,
+            "led": LedActuator,
         }
 
     def register(self, type_name: str, cls: Type[BaseDevice]) -> None:

@@ -77,9 +77,12 @@ export function PinModal({ node, isOpen, onClose, onExecute, busy }: PinModalPro
                 value={digitalVal}
                 onChange={(e) => setDigitalVal(Number(e.target.value))}
               >
-                <option value={1}>HIGH (1 - Encendido)</option>
-                <option value={0}>LOW (0 - Apagado)</option>
+                <option value={1}>HIGH (1 - Voltaje 3.3V)</option>
+                <option value={0}>LOW (0 - Voltaje 0V / GND)</option>
               </select>
+              <span className="text-xs text-muted-foreground mt-1 block">
+                Nota: En hardware Active-LOW (ej. LED interno NodeMCU o módulos de relé active-low), LOW (0V) enciende el circuito.
+              </span>
             </label>
           ) : (
             <label>

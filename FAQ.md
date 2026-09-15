@@ -38,3 +38,4 @@
     Escenario D: Conflicto con un Override Manual de Usuario (MANUAL_ON / MANUAL_OFF)
     Comportamiento: Bloqueo Absoluto.
     Si un operador fijó el actuador en modo manual desde la API REST o la interfaz web, el CommandDispatcher bloquea y rechaza de inmediato tanto a las reglas automáticas como al scheduler, emitiendo un evento command.blocked y registrando el intento en la bitácora.
+

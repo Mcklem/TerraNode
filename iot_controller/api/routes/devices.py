@@ -82,6 +82,7 @@ class CommandPayload(BaseModel):
 class DeviceStateResponse(BaseModel):
     id: str = Field(..., description="ID único del dispositivo (ej. 'pump_01', 'soil_01')")
     type: str = Field(..., description="Tipo de controlador de dispositivo (ej. 'relay', 'soil_moisture', 'servo')")
+    category: str = Field(..., description="Categoría principal del dispositivo ('sensor' | 'actuator')")
     node_id: str = Field(..., description="ID del nodo hardware al que está conectado")
     status: str = Field(..., description="Estado del driver de dispositivo ('OK', 'ERROR', 'DISCONNECTED')")
     control_mode: str = Field(..., description="Modo lógico de control ('AUTO', 'MANUAL_ON', 'MANUAL_OFF', 'MANUAL_VALUE')")
@@ -93,6 +94,7 @@ class DeviceStateResponse(BaseModel):
             "example": {
                 "id": "pump_01",
                 "type": "relay",
+                "category": "actuator",
                 "node_id": "node_jardin",
                 "status": "OK",
                 "control_mode": "MANUAL_ON",
@@ -152,6 +154,7 @@ async def list_devices(
         dev_info = {
             "id": dev.id,
             "type": dev.type,
+            "category": dev.category,
             "node_id": dev.node.id,
             "status": dev.status.value,
             "control_mode": st.mode.value,
@@ -183,6 +186,7 @@ async def get_device(
     return {
         "id": dev.id,
         "type": dev.type,
+        "category": dev.category,
         "node_id": dev.node.id,
         "status": dev.status.value,
         "control_mode": st.mode.value,

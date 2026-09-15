@@ -17,6 +17,10 @@ class Actuator(BaseDevice):
     def current_state(self) -> str:
         return self._current_state
 
+    @property
+    def category(self) -> str:
+        return "actuator"
+
     @abstractmethod
     async def turn_on(self) -> Dict[str, Any]:
         """Turn on the actuator."""
