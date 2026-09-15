@@ -123,6 +123,12 @@ def create_app() -> FastAPI:
     app.include_router(rules.router)
     app.include_router(schedules.router)
 
+    # Mount MCP Server SSE router if enabled in settings
+    from core.settings import settings
+    if settings.enable_mcp and settings.mcp_transport == "sse":
+        from mcp_server.router import mount_mcp_to_fastapi
+        mount_mcp_to_fastapi(app, path=settings.mcp_path)
+
     from fastapi.responses import JSONResponse
 
     @app.exception_handler(ValueError)

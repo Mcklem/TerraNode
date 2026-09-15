@@ -27,6 +27,11 @@ class Settings:
     api_host: str = os.getenv("API_HOST", "0.0.0.0")
     api_port: int = int(os.getenv("API_PORT", "8000"))
 
+    # MCP (Model Context Protocol) Server settings
+    enable_mcp: bool = os.getenv("ENABLE_MCP", "false").lower() in ("true", "1", "yes")
+    mcp_transport: str = os.getenv("MCP_TRANSPORT", "sse").lower()
+    mcp_path: str = os.getenv("MCP_PATH", "/mcp")
+
     def get_log_level_int(self) -> int:
         """Convert log level string to standard logging integer level."""
         return getattr(logging, self.log_level, logging.INFO)

@@ -147,6 +147,10 @@ class ControllerSystem:
             self.logger.info(
                 f"FastAPI Web Service started on http://{settings.api_host}:{settings.api_port}"
             )
+            if settings.enable_mcp:
+                self.logger.info(
+                    f"MCP Server active! Transport: '{settings.mcp_transport}', Endpoint: 'http://{settings.api_host}:{settings.api_port}{settings.mcp_path}'"
+                )
 
         # 13. Connect Nodes & Start Subsystems
         self.logger.info("Connecting hardware nodes...")
