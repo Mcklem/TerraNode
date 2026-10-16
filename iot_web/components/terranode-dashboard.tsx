@@ -35,7 +35,7 @@ export default function TerraNodeDashboard() {
     toggleRuleAction,
     executeRawPinCommand,
     restoreAllOverrides,
-  } = useTerraNode(2000)
+  } = useTerraNode(10000)
 
   return (
     <main className="min-h-screen bg-background text-foreground font-sans">

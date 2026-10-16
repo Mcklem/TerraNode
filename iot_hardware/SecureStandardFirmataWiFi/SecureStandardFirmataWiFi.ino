@@ -329,6 +329,7 @@ void sysexCallback(byte command, byte argc, byte *argv) {
     if (strcmp(keyBuffer, node_auth_key) == 0) {
       isNodeAuthenticated = true;
       lastTrafficMillis = millis();
+      previousMillis = lastTrafficMillis;
       authStatus = 1;
     } else {
       isNodeAuthenticated = false;
@@ -413,21 +414,90 @@ void sysexCallback(byte command, byte argc, byte *argv) {
   // ALL HARDWARE MUTATION COMMANDS (I2C, SERVO, PIN WRITES) ARE STRICTLY BLOCKED UNTIL AUTHENTICATED:
   if (!isNodeAuthenticated) return;
 
-  byte slaveAddress, data, stopTX;
+  byte mode, slaveAddress, data, stopTX;
   int slaveRegister;
   unsigned int delayTime;
 
   switch (command) {
     case I2C_REQUEST:
-      slaveAddress = argv[0];
-      if (argc == 6) {
-        slaveRegister = argv[2] + (argv[3] << 7);
-        data = argv[4] + (argv[5] << 7);
+      mode = argv[1] & I2C_READ_WRITE_MODE_MASK;
+      if (argv[1] & I2C_10BIT_ADDRESS_MODE_MASK) {
+        Firmata.sendString("10-bit addressing not supported");
+        return;
       } else {
-        slaveRegister = I2C_REGISTER_NOT_SPECIFIED;
-        data = argv[2] + (argv[3] << 7);
+        slaveAddress = argv[0];
       }
-      readAndReportData(slaveAddress, (int)slaveRegister, data, I2C_STOP_TX);
+
+      if (argv[1] & I2C_END_TX_MASK) {
+        stopTX = I2C_RESTART_TX;
+      } else {
+        stopTX = I2C_STOP_TX;
+      }
+
+      switch (mode) {
+        case I2C_WRITE:
+          Wire.beginTransmission(slaveAddress);
+          for (byte i = 2; i < argc; i += 2) {
+            data = argv[i] + (argv[i + 1] << 7);
+            wireWrite(data);
+          }
+          Wire.endTransmission();
+          delayMicroseconds(70);
+          break;
+        case I2C_READ:
+          if (argc == 6) {
+            slaveRegister = argv[2] + (argv[3] << 7);
+            data = argv[4] + (argv[5] << 7);
+          } else {
+            slaveRegister = I2C_REGISTER_NOT_SPECIFIED;
+            data = argv[2] + (argv[3] << 7);
+          }
+          readAndReportData(slaveAddress, (int)slaveRegister, data, stopTX);
+          break;
+        case I2C_READ_CONTINUOUSLY:
+          if ((queryIndex + 1) >= I2C_MAX_QUERIES) {
+            Firmata.sendString("too many queries");
+            break;
+          }
+          if (argc == 6) {
+            slaveRegister = argv[2] + (argv[3] << 7);
+            data = argv[4] + (argv[5] << 7);
+          } else {
+            slaveRegister = (int)I2C_REGISTER_NOT_SPECIFIED;
+            data = argv[2] + (argv[3] << 7);
+          }
+          queryIndex++;
+          query[queryIndex].addr = slaveAddress;
+          query[queryIndex].reg = slaveRegister;
+          query[queryIndex].bytes = data;
+          query[queryIndex].stopTX = stopTX;
+          break;
+        case I2C_STOP_READING:
+          byte queryIndexToSkip;
+          if (queryIndex <= 0) {
+            queryIndex = -1;
+          } else {
+            queryIndexToSkip = 0;
+            for (byte i = 0; i < queryIndex + 1; i++) {
+              if (query[i].addr == slaveAddress) {
+                queryIndexToSkip = i;
+                break;
+              }
+            }
+            for (byte i = queryIndexToSkip; i < queryIndex + 1; i++) {
+              if (i < I2C_MAX_QUERIES) {
+                query[i].addr = query[i + 1].addr;
+                query[i].reg = query[i + 1].reg;
+                query[i].bytes = query[i + 1].bytes;
+                query[i].stopTX = query[i + 1].stopTX;
+              }
+            }
+            queryIndex--;
+          }
+          break;
+        default:
+          break;
+      }
       break;
     case I2C_CONFIG:
       delayTime = (argv[0] + (argv[1] << 7));
@@ -547,7 +617,7 @@ void loop() {
 
   currentMillis = millis();
   if (isNodeAuthenticated && (currentMillis - previousMillis > samplingInterval)) {
-    previousMillis += samplingInterval;
+    previousMillis = currentMillis;
     for (pin = 0; pin < TOTAL_PINS; pin++) {
       if (IS_PIN_ANALOG(pin) && Firmata.getPinMode(pin) == PIN_MODE_ANALOG) {
         analogPin = PIN_TO_ANALOG(pin);

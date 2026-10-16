@@ -48,6 +48,8 @@ class BMP180Sensor(Sensor):
         raw = await self.node.i2c_read(self.address, self.REG_CALIB, 22, timeout=3.0)
         if len(raw) < 22:
             raise RuntimeError(f"Expected 22 calibration bytes from BMP180, got {len(raw)}")
+        if all(b == 0 for b in raw) or all(b == 0xFF for b in raw):
+            raise RuntimeError("Invalid BMP180 calibration data (all 0x00 or 0xFF)")
 
         self._calib = {
             "AC1": _signed16(raw[0], raw[1]),
@@ -65,7 +67,8 @@ class BMP180Sensor(Sensor):
 
     async def read_raw_temperature(self) -> int:
         await self.node.i2c_write(self.address, [self.REG_CONTROL, 0x2E])
-        await asyncio.sleep(0.01)
+        # BMP180 needs 4.5ms conversion + margin for WiFi TCP packet separation
+        await asyncio.sleep(0.05)
         raw = await self.node.i2c_read(self.address, self.REG_DATA, 2, timeout=2.0)
         if len(raw) < 2:
             raise RuntimeError("Timeout or insufficient data reading BMP180 temperature")
@@ -74,8 +77,9 @@ class BMP180Sensor(Sensor):
     async def read_raw_pressure(self) -> int:
         cmd = 0x34 + (self.oss << 6)
         await self.node.i2c_write(self.address, [self.REG_CONTROL, cmd])
-        delay = 0.005 if self.oss == 0 else (0.008 if self.oss == 1 else (0.014 if self.oss == 2 else 0.026))
-        await asyncio.sleep(delay)
+        # BMP180 conversion time (4.5ms..25.5ms) + margin for WiFi TCP packet separation
+        base_delay = 0.005 if self.oss == 0 else (0.008 if self.oss == 1 else (0.014 if self.oss == 2 else 0.026))
+        await asyncio.sleep(base_delay + 0.045)
         raw = await self.node.i2c_read(self.address, self.REG_DATA, 3, timeout=2.0)
         if len(raw) < 3:
             raise RuntimeError("Timeout or insufficient data reading BMP180 pressure")
@@ -86,37 +90,38 @@ class BMP180Sensor(Sensor):
         if not c:
             raise RuntimeError("Calibration data not loaded")
 
-        # Temperature
-        X1 = ((UT - c["AC6"]) * c["AC5"]) / (2 ** 15)
+        # Temperature (Bosch BMP180 integer compensation algorithm)
+        X1 = ((UT - c["AC6"]) * c["AC5"]) >> 15
         denom = X1 + c["MD"]
-        X2 = (c["MC"] * (2 ** 11)) / denom if denom != 0 else 0
+        X2 = int((c["MC"] << 11) / denom) if denom != 0 else 0
         B5 = X1 + X2
-        temp = (B5 + 8) / 160.0
+        temp = ((B5 + 8) >> 4) / 10.0
 
         # Pressure
-        X1 = (B5 - 4000) * (c["B2"] / (2 ** 11))
-        X2 = (c["AC2"] * (B5 - 4000)) / (2 ** 11)
+        B6 = B5 - 4000
+        X1 = (c["B2"] * ((B6 * B6) >> 12)) >> 11
+        X2 = (c["AC2"] * B6) >> 11
         X3 = X1 + X2
-        B3 = (((c["AC1"] * 4 + int(X3)) * (2 ** self.oss)) + 2) / 4
+        B3 = (((c["AC1"] * 4 + X3) << self.oss) + 2) >> 2
 
-        X1 = c["AC3"] * B5 / (2 ** 13)
-        X2 = (c["B1"] * (B5 * B5 / (2 ** 12))) / (2 ** 16)
-        X3 = ((X1 + X2) + 2) / 4
-        B4 = c["AC4"] * (X3 + 32768) / (2 ** 15)
+        X1 = (c["AC3"] * B6) >> 13
+        X2 = (c["B1"] * ((B6 * B6) >> 12)) >> 16
+        X3 = ((X1 + X2) + 2) >> 2
+        B4 = (c["AC4"] * (X3 + 32768)) >> 15
 
-        B7 = (UP - B3) * (50000 / (2 ** self.oss))
+        B7 = (UP - B3) * (50000 >> self.oss)
         if B4 != 0:
             if B7 < 0x80000000:
-                p = (B7 * 2) / B4
+                p = int((B7 * 2) / B4)
             else:
-                p = (B7 / B4) * 2
+                p = int(B7 / B4) * 2
         else:
-            p = 101325.0
+            p = 101325
 
-        X1 = (p / (2 ** 8)) ** 2
-        X1 = (X1 * 3038) / (2 ** 16)
-        X2 = (-7357 * p) / (2 ** 16)
-        pressure_pa = p + ((X1 + X2 + 3791) / (2 ** 4))
+        X1 = (p >> 8) * (p >> 8)
+        X1 = (X1 * 3038) >> 16
+        X2 = (-7357 * p) >> 16
+        pressure_pa = p + ((X1 + X2 + 3791) >> 4)
 
         # Altitude (m)
         altitude = 44330.0 * (1.0 - (pressure_pa / 101325.0) ** 0.19029495)
@@ -135,6 +140,16 @@ class BMP180Sensor(Sensor):
             UT = await self.read_raw_temperature()
             UP = await self.read_raw_pressure()
             temp, pressure_hpa, altitude_m = self.calculate_values(UT, UP)
+
+            self._logger.debug(
+                f"BMP180 raw: UT={UT}, UP={UP} -> T={temp}°C, P={pressure_hpa}hPa, Alt={altitude_m}m"
+            )
+
+            # BMP180 physical operating range: -40..+85 °C, 300..1100 hPa
+            if not (-40.0 <= temp <= 85.0 and 300.0 <= pressure_hpa <= 1100.0):
+                raise RuntimeError(
+                    f"Out-of-range BMP180 measurement discarded (T={temp}°C, P={pressure_hpa}hPa, UT={UT}, UP={UP})"
+                )
 
             self._last_value = temp
             self._last_pressure = pressure_hpa

@@ -99,6 +99,26 @@ class TestDrivers(unittest.IsolatedAsyncioTestCase):
         self.assertIn("pressure", state)
         self.assertIn("altitude", state)
 
+    def test_bmp180_bosch_datasheet_reference(self):
+        bmp = BMP180Sensor("bmp_ref", "bmp180", self.node, {"address": 0x77, "oss": 0})
+        bmp._calib = {
+            "AC1": 408,
+            "AC2": -72,
+            "AC3": -14383,
+            "AC4": 32741,
+            "AC5": 32757,
+            "AC6": 23153,
+            "B1": 6190,
+            "B2": 4,
+            "MB": -32768,
+            "MC": -8711,
+            "MD": 2868,
+        }
+        temp, pressure_hpa, altitude_m = bmp.calculate_values(UT=27898, UP=23843)
+        self.assertEqual(temp, 15.0)
+        self.assertAlmostEqual(pressure_hpa, 699.65, delta=0.02)
+        self.assertAlmostEqual(altitude_m, 3016.66, delta=0.5)
+
 
 if __name__ == "__main__":
     unittest.main()
