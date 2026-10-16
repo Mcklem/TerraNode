@@ -99,10 +99,11 @@ class FirmataNode(BaseNode):
                 self._board = board
                 self._latency_ms = (time.time() - start_time) * 1000
 
-                # Configure aggressive TCP keepalive on underlying socket
+                # Configure aggressive TCP keepalive and disable Nagle's algorithm (TCP_NODELAY) on underlying socket
                 if hasattr(board, "sock") and board.sock:
                     try:
                         import socket
+                        board.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                         board.sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
                         if hasattr(socket, "SIO_KEEPALIVE_VALS"):
                             # Windows: (on_off, keepalive_time_ms, keepalive_interval_ms) -> 2s idle, 1s interval
@@ -163,7 +164,7 @@ class FirmataNode(BaseNode):
             try:
                 board = self._board
                 if board and hasattr(board, "_send_sysex"):
-                    board._send_sysex(0x7A, [19 & 0x7F, (19 >> 7) & 0x7F])
+                    board._send_sysex(0x7A, [200 & 0x7F, (200 >> 7) & 0x7F])
             except Exception:
                 pass
             try:
@@ -328,17 +329,17 @@ class FirmataNode(BaseNode):
             # pymata4 callback format: [pin_type(6), address, register, raw_byte0, raw_byte1, ..., timestamp]
             if len(data) >= 4 and data[1] == address and data[2] == register:
                 raw_bytes = data[3:-1] if isinstance(data[-1], float) else data[3:]
-                if len(raw_bytes) >= num_bytes:
-                    result_raw = list(raw_bytes[:num_bytes])
+                if len(raw_bytes) == num_bytes:
+                    result_raw = list(raw_bytes)
                     if not loop.is_closed():
                         loop.call_soon_threadsafe(event.set)
 
-        self._board.i2c_read(address, register, num_bytes, callback=_i2c_cb)
-
-        # Ensure pymata4 updates callback for this address in its internal map
+        # Ensure pymata4 updates callback for this address in its internal map before sending request
         if hasattr(self._board, "i2c_map") and address in self._board.i2c_map:
             with self._board.the_i2c_map_lock:
                 self._board.i2c_map[address]["callback"] = _i2c_cb
+
+        self._board.i2c_read(address, register, num_bytes, callback=_i2c_cb)
 
         try:
             await asyncio.wait_for(event.wait(), timeout=timeout)

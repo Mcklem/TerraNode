@@ -233,13 +233,13 @@ def calculate_temperature(UT):
     MC = calibration["MC"]
     MD = calibration["MD"]
 
-    X1 = ((UT - AC6) * AC5) / (2 ** 15)
+    X1 = ((UT - AC6) * AC5) >> 15
 
-    X2 = (MC * (2 ** 11)) / (X1 + MD)
+    X2 = int((MC << 11) / (X1 + MD))
 
     B5 = X1 + X2
 
-    temperature = (B5 + 8) / 160.0
+    temperature = ((B5 + 8) >> 4) / 10.0
 
     return temperature, B5
 
@@ -259,42 +259,41 @@ def calculate_pressure(UP, B5):
     B1 = calibration["B1"]
     B2 = calibration["B2"]
 
-    X1 = (B5 - 4000) * (B2 / (2 ** 11))
+    B6 = B5 - 4000
 
-    X2 = (AC2 * (B5 - 4000)) / (2 ** 11)
+    X1 = (B2 * ((B6 * B6) >> 12)) >> 11
+
+    X2 = (AC2 * B6) >> 11
 
     X3 = X1 + X2
 
-    B3 = (
-        (((AC1 * 4 + X3) * (2 ** OSS)) + 2)
-        / 4
-    )
+    B3 = (((AC1 * 4 + X3) << OSS) + 2) >> 2
 
-    X1 = AC3 * B5 / (2 ** 13)
+    X1 = (AC3 * B6) >> 13
 
-    X2 = (B1 * (B5 * B5 / (2 ** 12))) / (2 ** 16)
+    X2 = (B1 * ((B6 * B6) >> 12)) >> 16
 
-    X3 = ((X1 + X2) + 2) / 4
+    X3 = ((X1 + X2) + 2) >> 2
 
-    B4 = AC4 * (X3 + 32768) / (2 ** 15)
+    B4 = (AC4 * (X3 + 32768)) >> 15
 
-    B7 = (UP - B3) * (50000 / (2 ** OSS))
+    B7 = (UP - B3) * (50000 >> OSS)
 
     if B7 < 0x80000000:
 
-        pressure = (B7 * 2) / B4
+        pressure = int((B7 * 2) / B4)
 
     else:
 
-        pressure = (B7 / B4) * 2
+        pressure = int(B7 / B4) * 2
 
-    X1 = (pressure / (2 ** 8)) ** 2
+    X1 = (pressure >> 8) * (pressure >> 8)
 
-    X1 = (X1 * 3038) / (2 ** 16)
+    X1 = (X1 * 3038) >> 16
 
-    X2 = (-7357 * pressure) / (2 ** 16)
+    X2 = (-7357 * pressure) >> 16
 
-    pressure = pressure + ((X1 + X2 + 3791) / (2 ** 4))
+    pressure = pressure + ((X1 + X2 + 3791) >> 4)
 
     return pressure
 
