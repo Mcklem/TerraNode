@@ -32,6 +32,9 @@ async def main_mcp_async(
         f"Starting TerraNode MCP Standalone Server: config='{active_config}', db_url='{active_db_url}', mock={active_mock}, transport='{transport}'"
     )
 
+    # Disable internal API server when running standalone MCP runner to avoid port conflicts
+    settings.enable_api = False
+
     # Boot core ControllerSystem (without internal API server) to initialize dependencies
     system = ControllerSystem(
         config_path=active_config,

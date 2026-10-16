@@ -14,7 +14,7 @@ def register_resources(mcp: Any) -> None:
     )
     def system_summary_resource() -> str:
         health = (
-            system_container.health_monitor.get_status()
+            system_container.health_monitor.get_system_health()
             if system_container.health_monitor
             else {}
         )
@@ -54,16 +54,20 @@ def register_resources(mcp: Any) -> None:
 
         devices = system_container.device_manager.get_all_devices()
         result = {}
-        for dev_id, dev in devices.items():
-            override = (
-                system_container.override_registry.get_override(dev_id)
+        for dev in devices:
+            dev_id = getattr(dev, "id", str(dev))
+            control_state = (
+                system_container.override_registry.get_state(dev_id)
                 if system_container.override_registry
                 else None
             )
+            status_val = dev.status.value if hasattr(dev, "status") and hasattr(dev.status, "value") else str(getattr(dev, "status", "UNKNOWN"))
+            state = dev.get_state() if hasattr(dev, "get_state") else {}
             result[dev_id] = {
                 "name": getattr(dev, "name", dev_id),
-                "type": getattr(dev, "type", "unknown"),
-                "control_mode": override.mode.value if override else "AUTO",
-                "status": dev.get_status(),
+                "type": getattr(dev, "type", getattr(dev, "device_type", "unknown")),
+                "control_mode": control_state.mode.value if control_state else "AUTO",
+                "status": status_val,
+                "state": state,
             }
         return json.dumps(result, indent=2, default=str)

@@ -20,20 +20,23 @@ def register_device_tools(mcp: Any) -> None:
 
         devices = system_container.device_manager.get_all_devices()
         result = []
-        for dev_id, dev in devices.items():
-            status = dev.get_status()
-            override = None
+        for dev in devices:
+            dev_id = getattr(dev, "id", str(dev))
+            state = dev.get_state() if hasattr(dev, "get_state") else {}
+            status_val = dev.status.value if hasattr(dev, "status") and hasattr(dev.status, "value") else str(getattr(dev, "status", "UNKNOWN"))
+            control_state = None
             if system_container.override_registry:
-                override = system_container.override_registry.get_override(dev_id)
+                control_state = system_container.override_registry.get_state(dev_id)
 
             dev_info = {
                 "id": dev_id,
                 "name": getattr(dev, "name", dev_id),
                 "type": dev.__class__.__name__,
-                "device_type": getattr(dev, "type", "unknown"),
-                "node_id": getattr(dev, "node_id", None),
-                "control_mode": override.mode.value if override else "AUTO",
-                "status": status,
+                "device_type": getattr(dev, "type", getattr(dev, "device_type", "unknown")),
+                "node_id": getattr(dev.node, "id", None) if getattr(dev, "node", None) else None,
+                "control_mode": control_state.mode.value if control_state else "AUTO",
+                "status": status_val,
+                "state": state,
             }
             result.append(dev_info)
 
@@ -75,14 +78,14 @@ def register_device_tools(mcp: Any) -> None:
 
         try:
             params = params or {}
-            result = await system_container.live_command_service.execute_command(
+            result = await system_container.live_command_service.execute_live_command(
                 device_id=device_id,
-                command_name=command,
-                args=params,
-                source="MCP_AGENT",
+                action=command,
+                params=params,
+                user_id="MCP_AGENT",
             )
             return json.dumps(
-                {"success": True, "device_id": device_id, "command": command, "result": result},
+                {"success": result.success, "device_id": device_id, "command": command, "result": result.to_dict() if hasattr(result, "to_dict") else str(result)},
                 indent=2,
                 default=str,
             )
@@ -101,7 +104,7 @@ def register_device_tools(mcp: Any) -> None:
             return json.dumps({"error": "LiveCommandService is not initialized."})
 
         try:
-            success = await system_container.live_command_service.restore_auto_control(device_id)
-            return json.dumps({"success": success, "device_id": device_id, "mode": "AUTO"})
+            result = await system_container.live_command_service.restore_control(device_id)
+            return json.dumps({"success": True, "device_id": device_id, "mode": "AUTO", "result": result.to_dict() if hasattr(result, "to_dict") else str(result)})
         except Exception as e:
             return json.dumps({"success": False, "device_id": device_id, "error": str(e)})

@@ -1,5 +1,5 @@
 import json
-from typing import Any
+from typing import Any, Optional
 from api.dependencies import system_container
 
 
@@ -42,7 +42,7 @@ def register_system_tools(mcp: Any) -> None:
         if system_container.health_monitor is None:
             return json.dumps({"status": "HealthMonitor not active", "nodes_online": 0})
 
-        health_data = system_container.health_monitor.get_status()
+        health_data = system_container.health_monitor.get_system_health()
         return json.dumps(health_data, indent=2, default=str)
 
     @mcp.tool(
@@ -59,22 +59,45 @@ def register_system_tools(mcp: Any) -> None:
         overrides = system_container.override_registry.get_all_overrides()
         result = [
             {
-                "device_id": dev_id,
-                "mode": ov.mode.value,
-                "set_at": ov.timestamp,
-                "reason": ov.reason,
+                "device_id": st.device_id,
+                "mode": st.mode.value,
+                "set_at": st.set_at,
+                "last_action": st.last_action,
+                "source": st.override_source,
             }
-            for dev_id, ov in overrides.items()
+            for st in overrides
         ]
         return json.dumps({"count": len(result), "overrides": result}, indent=2, default=str)
+
+    @mcp.tool(
+        name="list_rules",
+        description="Lists all automation rules, their configurations, thresholds, enabled states, and trigger statuses.",
+    )
+    def list_rules() -> str:
+        if system_container.rule_engine is None:
+            return json.dumps({"error": "RuleEngine is not initialized."})
+
+        rules = system_container.rule_engine.get_rule_states()
+        return json.dumps({"count": len(rules), "rules": rules}, indent=2, default=str)
 
     @mcp.tool(
         name="toggle_rule",
         description="Enables or disables a sensor-driven automation rule in RuleEngine by rule ID.",
     )
-    def toggle_rule(rule_id: str, enabled: bool) -> str:
+    def toggle_rule(rule_id: str, enabled: Optional[bool] = None) -> str:
         if system_container.rule_engine is None:
             return json.dumps({"error": "RuleEngine is not initialized."})
 
-        success = system_container.rule_engine.set_rule_enabled(rule_id, enabled)
-        return json.dumps({"rule_id": rule_id, "enabled": enabled, "success": success})
+        cfg = system_container.rule_engine.rules_config.get(rule_id)
+        if not cfg:
+            return json.dumps({"error": f"Rule '{rule_id}' not found."})
+
+        if enabled is not None:
+            cfg["enabled"] = enabled
+            if not enabled:
+                system_container.rule_engine._rule_states[rule_id] = False
+            new_state = enabled
+        else:
+            new_state = system_container.rule_engine.toggle_rule(rule_id)
+
+        return json.dumps({"rule_id": rule_id, "enabled": new_state, "success": True})
