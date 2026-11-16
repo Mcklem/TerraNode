@@ -36,6 +36,10 @@ class SoilMoistureSensor(Sensor):
 
         try:
             raw_val = self.node.analog_read(self.pin)
+            if raw_val is None:
+                # Return last known state if analog packet hasn't arrived yet
+                return self.get_state()
+
             # Map raw value to 0..100% moisture
             if self.dry_val != self.wet_val:
                 pct = 100.0 * (self.dry_val - raw_val) / (self.dry_val - self.wet_val)

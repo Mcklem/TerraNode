@@ -53,6 +53,7 @@ class CommandPayload(BaseModel):
         return data
 
     model_config = ConfigDict(
+        extra="ignore",
         json_schema_extra={
             "examples": [
                 {
@@ -90,6 +91,7 @@ class DeviceStateResponse(BaseModel):
     current_state: Dict[str, Any] = Field(..., description="Payload de estado actual y lecturas/posiciones físicas del dispositivo")
 
     model_config = ConfigDict(
+        extra="ignore",
         json_schema_extra={
             "example": {
                 "id": "pump_01",
@@ -119,6 +121,7 @@ class CommandResultResponse(BaseModel):
     state_payload: Dict[str, Any] = Field(..., description="Estado actualizado devuelto por el driver del dispositivo")
 
     model_config = ConfigDict(
+        extra="ignore",
         json_schema_extra={
             "example": {
                 "success": True,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 const baseUrl = process.env.TERRANODE_API_URL || 'http://localhost:8000'
+const apiKey = process.env.TERRANODE_API_KEY || ''
 const allowedMethods = new Set(['GET', 'POST', 'DELETE', 'PUT', 'PATCH', 'OPTIONS'])
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ path: string[] }> }) {
@@ -40,22 +41,38 @@ async function forward(request: NextRequest, pathParts: string[]) {
     targetUrl.searchParams.append(key, value)
   })
 
-  const body = request.method === 'POST' ? await request.text() : undefined
+  const body = ['POST', 'PUT', 'PATCH'].includes(request.method) ? await request.text() : undefined
 
-  // Mayor tiempo de espera para operaciones de compilación de firmware
+  // Mayor tiempo de espera para operaciones pesadas (compilación de firmware, recarga/aplicación de configuración)
   const isFirmwareBuild = pathParts.includes('firmware') && pathParts.includes('compile')
-  const timeoutMs = isFirmwareBuild ? 120000 : 15000
+  const isConfigReload = pathParts.includes('apply') || pathParts.includes('config')
+  const timeoutMs = isFirmwareBuild ? 120000 : isConfigReload ? 60000 : 30000
 
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
+    const forwardHeaders: Record<string, string> = {
+      Accept: '*/*',
+    }
+    if (apiKey) {
+      forwardHeaders['X-API-Key'] = apiKey
+    }
+    const incomingApiKey = request.headers.get('x-api-key')
+    if (incomingApiKey) {
+      forwardHeaders['X-API-Key'] = incomingApiKey
+    }
+    const incomingAuth = request.headers.get('authorization')
+    if (incomingAuth) {
+      forwardHeaders['Authorization'] = incomingAuth
+    }
+    if (body) {
+      forwardHeaders['Content-Type'] = 'application/json'
+    }
+
     const response = await fetch(targetUrl.toString(), {
       method: request.method,
-      headers: {
-        Accept: '*/*',
-        ...(body ? { 'Content-Type': 'application/json' } : {}),
-      },
+      headers: forwardHeaders,
       body,
       cache: 'no-store',
       signal: controller.signal,

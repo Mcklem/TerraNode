@@ -1,6 +1,7 @@
 from typing import Any, Optional
 from core.device_manager import DeviceManager
 from core.node_manager import NodeManager
+from core.pin_manager import PinManager
 from monitoring.health import HealthMonitor
 from services.live_command import LiveCommandService, OverrideRegistry
 from storage.database import Database
@@ -20,6 +21,9 @@ class SystemContainer:
         self.rule_engine: Optional[Any] = None
         self.db: Optional[Database] = None
         self.firmware_service: Optional[Any] = None
+        self.system: Optional[Any] = None
+        self.config_manager: Optional[Any] = None
+        self.notification_service: Optional[Any] = None
 
 
 system_container = SystemContainer()
@@ -81,4 +85,39 @@ def get_firmware_service():
         from firmware.service import FirmwareService
         system_container.firmware_service = FirmwareService(database=system_container.db)
     return system_container.firmware_service
+
+
+def get_system():
+    return system_container.system
+
+
+def get_config_manager():
+    if system_container.config_manager is None:
+        from config_manager.service import ConfigManagerService
+        from core.settings import settings
+        system_container.config_manager = ConfigManagerService(settings.config_path)
+    return system_container.config_manager
+
+
+def get_notification_service():
+    from services.notifications import NotificationService
+    if system_container.notification_service is None:
+        cfg = {}
+        if system_container.config_manager:
+            try:
+                cfg = system_container.config_manager.load_active_config(mask=False).get("notifications", {})
+            except Exception:
+                pass
+        system_container.notification_service = NotificationService(cfg)
+    else:
+        # Keep notification service configuration updated from latest active config
+        if system_container.config_manager:
+            try:
+                fresh_notif = system_container.config_manager.load_active_config(mask=False).get("notifications", {})
+                if fresh_notif:
+                    system_container.notification_service.update_config(fresh_notif)
+            except Exception:
+                pass
+    return system_container.notification_service
+
 

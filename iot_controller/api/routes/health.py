@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from api.dependencies import get_health_monitor, get_node_manager, get_device_manager
 from core.node_manager import NodeManager
 from core.device_manager import DeviceManager
+from devices.base_device import DeviceStatus
 from monitoring.health import HealthMonitor
 
 router = APIRouter(prefix="/api/v1/health", tags=["Health"])
@@ -15,6 +16,7 @@ class HealthSummaryResponse(BaseModel):
     connected_nodes: int = Field(..., description="Número de nodos con conexión activa")
     total_devices: int = Field(..., description="Número total de dispositivos registrados")
     report: Dict[str, Any] = Field(..., description="Reporte de salud desglosado por componente")
+    message: Optional[str] = Field(None, description="Mensaje descriptivo del estado general")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -26,7 +28,8 @@ class HealthSummaryResponse(BaseModel):
                 "report": {
                     "nodes": {"n1": {"connected": True, "status": "CONNECTED"}},
                     "devices": {"pump_01": {"type": "relay", "node": "n1", "status": "OK"}}
-                }
+                },
+                "message": "Todos los servicios y nodos respondiendo con normalidad."
             }
         }
     )
@@ -44,23 +47,46 @@ async def get_health_summary(
     dev_mgr: DeviceManager = Depends(get_device_manager),
 ):
     nodes = node_mgr.get_all_nodes()
+    devices = dev_mgr.get_all_devices()
+    total_nodes = len(nodes)
     connected_nodes = sum(1 for n in nodes if n.is_connected())
+
+    devices_in_error = [d.id for d in devices if d.status == DeviceStatus.ERROR]
+
+    if total_nodes == 0:
+        status = "OK"
+        message = "Sin nodos configurados. Sistema en espera."
+    elif connected_nodes == total_nodes:
+        if devices_in_error:
+            status = "WARNING"
+            message = f"Todos los nodos conectados, pero {len(devices_in_error)} dispositivo(s) presentan errores."
+        else:
+            status = "OK"
+            message = "Todos los servicios y nodos respondiendo con normalidad."
+    elif connected_nodes > 0:
+        status = "WARNING"
+        disconnected_count = total_nodes - connected_nodes
+        message = f"Operación degradada: {disconnected_count} de {total_nodes} nodo(s) desconectado(s)."
+    else:
+        status = "ERROR"
+        message = f"Sin comunicación hardware: 0 de {total_nodes} nodos conectados."
 
     if health_monitor:
         status_report = health_monitor.get_system_health()
     else:
         status_report = {
-            "status": "OK" if connected_nodes > 0 else "WARNING",
-            "nodes_connected": f"{connected_nodes}/{len(nodes)}",
-            "devices_count": len(dev_mgr.get_all_devices()),
+            "status": status,
+            "nodes_connected": f"{connected_nodes}/{total_nodes}",
+            "devices_count": len(devices),
         }
 
     return {
-        "status": "OK" if connected_nodes > 0 else "WARNING",
-        "total_nodes": len(nodes),
+        "status": status,
+        "total_nodes": total_nodes,
         "connected_nodes": connected_nodes,
-        "total_devices": len(dev_mgr.get_all_devices()),
+        "total_devices": len(devices),
         "report": status_report,
+        "message": message,
     }
 
 

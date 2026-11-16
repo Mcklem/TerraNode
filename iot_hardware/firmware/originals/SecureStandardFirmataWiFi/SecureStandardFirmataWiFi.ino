@@ -534,7 +534,9 @@ void systemResetCallback() {
     if (IS_PIN_ANALOG(i)) {
       setPinModeCallback(i, PIN_MODE_ANALOG);
     } else if (IS_PIN_DIGITAL(i)) {
-      setPinModeCallback(i, OUTPUT);
+      // Safe fail-safe default: Set to PIN_MODE_PULLUP (INPUT_PULLUP) so GPIOs remain HIGH/high-impedance.
+      // This prevents active-low relays from unintentionally triggering during reset, watchdog timeout or network drops.
+      setPinModeCallback(i, PIN_MODE_PULLUP);
     }
     servoPinMap[i] = 255;
   }

@@ -37,6 +37,43 @@ export default function TerraNodeDashboard() {
     restoreAllOverrides,
   } = useTerraNode(10000)
 
+  const getOverviewMessage = (): string => {
+    if (error) {
+      return error
+    }
+    if (loading && !health) {
+      return 'Sincronizando telemetría y comprobando el estado del sistema…'
+    }
+
+    const totalNodes = health?.total_nodes ?? nodes.length
+    const connectedNodes =
+      health?.connected_nodes ?? nodes.filter((n) => n.connected).length
+    const status = (health?.status || 'OK').toUpperCase()
+
+    if (totalNodes > 0 && connectedNodes === 0) {
+      return 'Alerta: No hay nodos hardware conectados. La red de sensores y actuadores está offline.'
+    }
+    if (totalNodes > 0 && connectedNodes < totalNodes) {
+      return `Atención: Red de invernadero degradada (${connectedNodes}/${totalNodes} nodos conectados). Algunos sectores no responden.`
+    }
+    if (status === 'ERROR') {
+      return (
+        health?.message ||
+        'Error: Fallo crítico detectado en la infraestructura del controlador.'
+      )
+    }
+    if (status === 'WARNING') {
+      return (
+        health?.message ||
+        'Atención: Se han detectado anomalías o dispositivos en estado de advertencia.'
+      )
+    }
+    if (overrides.length > 0) {
+      return `Red saludable con ${overrides.length} actuador(es) en override manual.`
+    }
+    return health?.message || 'Your greenhouse network is healthy and responding normally.'
+  }
+
   return (
     <main className="min-h-screen bg-background text-foreground font-sans">
       <Header
@@ -57,7 +94,7 @@ export default function TerraNodeDashboard() {
             </p>
             <h2>Good morning, operator.</h2>
             <p className="muted">
-              {error || 'Your greenhouse network is healthy and responding normally.'}
+              {getOverviewMessage()}
             </p>
           </div>
 
@@ -73,6 +110,7 @@ export default function TerraNodeDashboard() {
             health={health}
             nodes={nodes}
             devicesCount={devices.length}
+            devices={devices}
             overridesCount={overrides.length}
             loading={loading}
             error={error}

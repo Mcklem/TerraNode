@@ -12,11 +12,20 @@ class RuleConditionResponse(BaseModel):
     operator: str = Field(..., description="Operador de comparación ('<', '>', '==', '!=', etc.)")
     value: Any = Field(..., description="Valor umbral de disparo")
 
+    model_config = ConfigDict(extra="ignore")
+
 
 class RuleActionResponse(BaseModel):
-    device: str = Field(..., description="ID del actuador objetivo (ej. 'irrigation_pump')")
-    command: str = Field(..., description="Comando a ejecutar (ej. 'turn_on', 'set_position')")
+    device: Optional[str] = Field(None, description="ID del actuador objetivo (ej. 'irrigation_pump')")
+    command: Optional[str] = Field(None, description="Comando a ejecutar (ej. 'turn_on', 'set_position')")
     args: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Parámetros adicionales del comando")
+    type: Optional[str] = Field(None, description="Tipo de acción ('actuator' | 'notification')")
+    channel: Optional[str] = Field(None, description="Canal de notificación ('telegram', 'email', 'webhook', 'all')")
+    webhook_id: Optional[str] = Field(None, description="ID del webhook configurado")
+    title: Optional[str] = Field(None, description="Título o asunto de la notificación")
+    message: Optional[str] = Field(None, description="Cuerpo del mensaje o plantilla de la notificación")
+
+    model_config = ConfigDict(extra="ignore")
 
 
 class RuleStateResponse(BaseModel):
@@ -25,10 +34,13 @@ class RuleStateResponse(BaseModel):
     condition: RuleConditionResponse = Field(..., description="Condición del sensor para evaluar el disparo")
     actions: List[RuleActionResponse] = Field(default_factory=list, description="Lista de acciones a ejecutar")
     retrigger: bool = Field(False, description="True si la regla se dispara repetidamente en cada medición activa")
+    cooldown: Optional[int] = Field(None, description="Tiempo de enfriamiento en segundos entre notificaciones")
+    recovery_message: Optional[str] = Field(None, description="Mensaje de recuperación cuando la condición deja de cumplirse")
     is_triggered: bool = Field(False, description="True si la condición de la regla se encuentra actualmente cumplida")
     last_sensor_value: Optional[Any] = Field(None, description="Última lectura registrada del sensor de la condición")
 
     model_config = ConfigDict(
+        extra="ignore",
         json_schema_extra={
             "example": {
                 "id": "irrigation_start",

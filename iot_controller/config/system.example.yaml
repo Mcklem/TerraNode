@@ -1,5 +1,17 @@
+# ------------------------------------------------------------------------------
+# 6. NOTIFICATIONS SECTION (MULTI-CHANNEL ALERTS):
+#    Configure Email, Telegram Bot, and custom Webhooks.
+#    - email: SMTP host, port, TLS, credentials, and recipient list.
+#    - telegram: Bot token and target chat_id.
+#    - webhooks: Named webhook endpoints with custom URL, method, headers, and payload template.
 # ==============================================================================
 # TERRANODE IOT CONTROLLER - SYSTEM CONFIGURATION REFERENCE & TEMPLATE
+# ------------------------------------------------------------------------------
+# 6. NOTIFICATIONS SECTION (MULTI-CHANNEL ALERTS):
+#    Configure Email, Telegram Bot, and custom Webhooks.
+#    - email: SMTP host, port, TLS, credentials, and recipient list.
+#    - telegram: Bot token and target chat_id.
+#    - webhooks: Named webhook endpoints with custom URL, method, headers, and payload template.
 # ==============================================================================
 # This template serves as the canonical base configuration for setting up a 
 # TerraNode installation from scratch.
@@ -89,6 +101,12 @@
 #    - time: Fixed daily time "HH:MM" (e.g. "08:00")
 #    - days: List of active days (e.g. ["mon", "tue", "wed", "thu", "fri", "sat", "sun"])
 #    - cron: 5-field cron pattern (e.g. "0 22 * * 1,3,5" for Mon, Wed, Fri at 22:00)
+# ------------------------------------------------------------------------------
+# 6. NOTIFICATIONS SECTION (MULTI-CHANNEL ALERTS):
+#    Configure Email, Telegram Bot, and custom Webhooks.
+#    - email: SMTP host, port, TLS, credentials, and recipient list.
+#    - telegram: Bot token and target chat_id.
+#    - webhooks: Named webhook endpoints with custom URL, method, headers, and payload template.
 # ==============================================================================
 
 system:
@@ -205,3 +223,29 @@ schedules:
     stop_command: turn_off
     cron: "0 22 * * 1,3,5"       # Lunes, Miércoles y Viernes a las 22:00
     duration: 300                 # 5 minutos
+
+notifications:
+  email:
+    enabled: false
+    smtp_host: "${EMAIL_SMTP_HOST:-smtp.example.com}"
+    smtp_port: ${EMAIL_SMTP_PORT:-587}
+    use_tls: true
+    username: "${EMAIL_USERNAME:-user@example.com}"
+    password: "${EMAIL_PASSWORD:-app_password_here}"
+    from_address: "${EMAIL_FROM_ADDRESS:-terranode@example.com}"
+    to_addresses:
+      - "admin@example.com"
+  telegram:
+    enabled: false
+    bot_token: "${TELEGRAM_BOT_TOKEN:-123456789:ABC-DEF1234ghIkl-zyx57W2v1u123ew11}"
+    chat_id: "${TELEGRAM_CHAT_ID:-987654321}"
+  webhooks:
+    home_assistant:
+      name: "Home Assistant"
+      enabled: false
+      url: "https://ha.example.com/api/webhook/terranode"
+      method: "POST"
+      headers:
+        Authorization: "Bearer your_token_here"
+        Content-Type: "application/json"
+      payload_template: '{"event": "{rule_id}", "device": "{device}", "value": {value}, "timestamp": "{timestamp}"}'

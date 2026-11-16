@@ -70,6 +70,30 @@ nodes:
         with self.assertRaises(ConfigurationError):
             loader.load()
 
+    def test_environment_variable_interpolation(self):
+        os.environ["TEST_NODE_HOST"] = "192.168.1.99"
+        os.environ["TEST_AUTH_KEY"] = "super_secret_123"
+        try:
+            yaml_content = """
+nodes:
+  node_01:
+    driver: mock
+    host: ${TEST_NODE_HOST}
+    auth_key: ${TEST_AUTH_KEY:-fallback_key}
+    port: ${TEST_PORT:-3030}
+devices: {}
+"""
+            filepath = self._write_yaml(yaml_content)
+            loader = ConfigLoader(filepath)
+            config = loader.load()
+
+            self.assertEqual(config["nodes"]["node_01"]["host"], "192.168.1.99")
+            self.assertEqual(config["nodes"]["node_01"]["auth_key"], "super_secret_123")
+            self.assertEqual(config["nodes"]["node_01"]["port"], 3030)
+        finally:
+            os.environ.pop("TEST_NODE_HOST", None)
+            os.environ.pop("TEST_AUTH_KEY", None)
+
     def test_missing_file_raises_error(self):
         loader = ConfigLoader("non_existent_file.yaml")
         with self.assertRaises(ConfigurationError):

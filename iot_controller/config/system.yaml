@@ -101,7 +101,7 @@ system:
 nodes:
   node_one:
     driver: secure_standard_firmata_wifi
-    auth_key: CFNQvkNfttUdekyjAct0
+    auth_key: ${NODE_ONE_AUTH_KEY}
     use_tls: false
     host: 192.168.1.107
     port: 3030
@@ -117,7 +117,6 @@ nodes:
         calibration:              # Calibration mapping (dry -> 0%, wet -> 100%)
           dry: 900
           wet: 350
-      
       builtin_led:
         type: led
         pin: D0
@@ -128,8 +127,49 @@ nodes:
         bus: i2c
         address: 0x77
         poll_interval: 10
-        
+
       irrigation_pump:
         type: relay
         pin: D5
         active_low: true
+
+notifications:
+  email:
+    enabled: false
+    smtp_host: "${EMAIL_SMTP_HOST:-}"
+    smtp_port: ${EMAIL_SMTP_PORT:-587}
+    use_tls: true
+    username: "${EMAIL_USERNAME:-}"
+    password: "${EMAIL_PASSWORD:-}"
+    from_address: "${EMAIL_FROM_ADDRESS:-}"
+    to_addresses: []
+  telegram:
+    enabled: true
+    bot_token: ${TELEGRAM_BOT_TOKEN}
+    chat_id: ${TELEGRAM_CHAT_ID}
+  webhooks:
+    home_assistant:
+      name: "Home Assistant"
+      enabled: false
+      url: "https://example.com/api/webhook/terranode"
+      method: "POST"
+      headers:
+        Content-Type: "application/json"
+      payload_template: '{"event": "{rule_id}", "device": "{device}", "value": {value}, "timestamp": "{timestamp}"}'
+rules:
+  riesgo_heladas:
+    enabled: true
+    retrigger: false
+    cooldown: 86400
+    recovery_message: Suben las temperaturas, fin de riesgo por heladas
+    condition:
+      device: environment_01
+      property: temperature
+      operator: <
+      value: -10
+    actions:
+      - type: notification
+        channel: telegram
+        title: Alerta de Regla
+        message: 'Riesgo de rotura de  {device}: valor actual {value} (umbral {operator} {threshold})'
+schedules: {}

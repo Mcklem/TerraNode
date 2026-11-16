@@ -27,6 +27,7 @@ class RawPinCommand(BaseModel):
     )
 
     model_config = ConfigDict(
+        extra="ignore",
         json_schema_extra={
             "examples": [
                 {
@@ -61,6 +62,7 @@ class NodeInfoResponse(BaseModel):
     last_error: Optional[str] = Field(None, description="Último mensaje de error de conexión o seguridad registrado")
 
     model_config = ConfigDict(
+        extra="ignore",
         json_schema_extra={
             "example": {
                 "id": "node_jardin",

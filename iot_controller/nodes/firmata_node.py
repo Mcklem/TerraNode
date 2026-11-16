@@ -29,12 +29,12 @@ def _safe_tcp_receiver(self):
         try:
             if not getattr(self, "sock", None):
                 break
-            payload = self.sock.recv(1)
-            if not payload:
+            chunk = self.sock.recv(128)
+            if not chunk:
                 # Socket closed by remote host (0 bytes returned)
                 self.shutdown_flag = True
                 break
-            self.the_deque.append(ord(payload))
+            self.the_deque.extend(chunk)
         except Exception:
             self.shutdown_flag = True
             break

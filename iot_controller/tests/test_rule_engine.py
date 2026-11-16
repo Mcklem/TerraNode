@@ -99,6 +99,34 @@ class TestRuleEngine(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(pump.current_state, "OFF")
 
+    async def test_rule_hysteresis_deadband(self):
+        # Configure rule with threshold < 30 and hysteresis 5 (remains active until >= 35)
+        self.engine.rules_config["irrigation_start"]["condition"]["hysteresis"] = 5.0
+
+        # 1. Trigger condition with 25 (< 30)
+        await self.bus.publish(
+            "device.value_changed",
+            sender="soil_01",
+            payload={"id": "soil_01", "value": 25.0, "status": "OK"},
+        )
+        self.assertTrue(self.engine._rule_states["irrigation_start"])
+
+        # 2. Moisture rises to 32 (above 30, but below 30 + 5 = 35) -> should remain triggered (deadband)
+        await self.bus.publish(
+            "device.value_changed",
+            sender="soil_01",
+            payload={"id": "soil_01", "value": 32.0, "status": "OK"},
+        )
+        self.assertTrue(self.engine._rule_states["irrigation_start"])
+
+        # 3. Moisture rises to 36 (>= 35) -> condition resets
+        await self.bus.publish(
+            "device.value_changed",
+            sender="soil_01",
+            payload={"id": "soil_01", "value": 36.0, "status": "OK"},
+        )
+        self.assertFalse(self.engine._rule_states["irrigation_start"])
+
 
 if __name__ == "__main__":
     unittest.main()

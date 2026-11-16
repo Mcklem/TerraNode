@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from typing import Any, Dict, Optional
 from automation.conditions import evaluate_condition
 from core.device_manager import DeviceManager
@@ -6,6 +7,16 @@ from core.event_bus import Event, EventBus
 from core.settings import settings
 from devices.actuator import Actuator
 from utils.logging import get_logger
+
+
+def _format_template_string(template_str: str, context: Dict[str, Any]) -> str:
+    """Substitute {key} placeholders using provided context dictionary."""
+    res = template_str
+    for k, v in context.items():
+        placeholder = "{" + str(k) + "}"
+        if placeholder in res:
+            res = res.replace(placeholder, str(v))
+    return res
 
 
 class RuleEngine:
@@ -18,11 +29,13 @@ class RuleEngine:
         event_bus: EventBus,
         log_rule_evaluations: Optional[bool] = None,
         command_dispatcher: Optional[Any] = None,
+        notification_service: Optional[Any] = None,
     ):
         self.rules_config = rules_config
         self.device_manager = device_manager
         self.event_bus = event_bus
         self.command_dispatcher = command_dispatcher
+        self.notification_service = notification_service
         self.log_rule_evaluations = (
             log_rule_evaluations if log_rule_evaluations is not None else settings.log_rule_evaluations
         )
@@ -30,6 +43,8 @@ class RuleEngine:
         self._logger = get_logger("RuleEngine")
         # Track active trigger state for each rule: rule_id -> bool
         self._rule_states: Dict[str, bool] = {}
+        # Track last notification dispatch time for anti-spam cooldown: rule_id -> timestamp (seconds)
+        self._last_notified_timestamps: Dict[str, float] = {}
         # Cache latest sensor payloads for immediate re-evaluation when control is restored
         self._last_sensor_payloads: Dict[str, dict] = {}
 
@@ -70,6 +85,8 @@ class RuleEngine:
                 "condition": cond,
                 "actions": actions,
                 "retrigger": cfg.get("retrigger", False),
+                "cooldown": cfg.get("cooldown"),
+                "recovery_message": cfg.get("recovery_message"),
                 "is_triggered": is_triggered,
                 "last_sensor_value": last_sensor_value,
             })
@@ -137,7 +154,8 @@ class RuleEngine:
             if target_dev and event.sender != target_dev:
                 continue
 
-            matched = evaluate_condition(cond, payload)
+            was_triggered = self._rule_states.get(rule_id, False)
+            matched = evaluate_condition(cond, payload, is_currently_triggered=was_triggered)
             prop = cond.get("property", "value")
             actual_val = payload.get(prop)
             op = cond.get("operator", "==")
@@ -145,17 +163,37 @@ class RuleEngine:
             actions = rule_cfg.get("actions", [])
             retrigger = rule_cfg.get("retrigger", False)
 
-            was_triggered = self._rule_states.get(rule_id, False)
+            ctx = {
+                "rule_id": rule_id,
+                "device": target_dev,
+                "property": prop,
+                "value": actual_val,
+                "operator": op,
+                "threshold": target_val,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
 
             if matched:
+                cooldown = float(rule_cfg.get("cooldown", 0))
+                now_time = asyncio.get_running_loop().time()
+                last_notified = self._last_notified_timestamps.get(rule_id, 0.0)
+                in_cooldown = (now_time - last_notified) < cooldown if cooldown > 0 else False
+
                 if not was_triggered or retrigger:
                     if self.log_rule_evaluations:
                         self._logger.info(
                             f"Rule '{rule_id}' [MATCH (Edge Trigger)]: {target_dev}.{prop} ({actual_val}) {op} {target_val} -> Executing {len(actions)} action(s)"
                         )
-                    success = await self._execute_actions(rule_id, actions)
+                    success = await self._execute_actions(
+                        rule_id,
+                        actions,
+                        context=ctx,
+                        skip_notifications=in_cooldown,
+                    )
                     if success:
                         self._rule_states[rule_id] = True
+                        if not in_cooldown:
+                            self._last_notified_timestamps[rule_id] = now_time
                     else:
                         # Actions blocked by live override dispatcher -> keep rule state as False
                         self._rule_states[rule_id] = False
@@ -171,17 +209,88 @@ class RuleEngine:
                         self._logger.info(
                             f"Rule '{rule_id}' [RESET]: Condition {target_dev}.{prop} ({actual_val}) {op} {target_val} no longer matches -> Resetting rule state."
                         )
+                    # Send recovery notification if configured
+                    recovery_msg = rule_cfg.get("recovery_message")
+                    if recovery_msg and self.notification_service:
+                        rec_rendered = _format_template_string(str(recovery_msg), ctx)
+                        from services.notifications.models import NotificationChannel, NotificationPayload
+                        rec_payload = NotificationPayload(
+                            title=f"✅ Recuperación: {rule_id}",
+                            message=rec_rendered,
+                            channel=NotificationChannel.ALL,
+                            metadata=ctx,
+                        )
+                        try:
+                            await self.notification_service.send(rec_payload, template_context=ctx)
+                        except Exception as e:
+                            self._logger.warning(f"Error dispatching recovery notification for rule '{rule_id}': {e}")
                 else:
                     if self.log_rule_evaluations:
                         self._logger.debug(
                             f"Rule '{rule_id}' [NO MATCH]: {target_dev}.{prop} ({actual_val}) {op} {target_val}"
                         )
 
-    async def _execute_actions(self, rule_id: str, actions: list) -> bool:
-        """Execute configured actuator actions. Returns True if all actions succeeded."""
+    async def _execute_actions(
+        self,
+        rule_id: str,
+        actions: list,
+        context: Optional[Dict[str, Any]] = None,
+        skip_notifications: bool = False,
+    ) -> bool:
+        """Execute configured actuator or notification actions. Returns True if all actions succeeded."""
         all_succeeded = True
 
         for action in actions:
+            act_type = action.get("type")
+            is_notification = act_type == "notification" or "channel" in action
+
+            # Notification action handling
+            if is_notification:
+                if skip_notifications:
+                    if self.log_rule_evaluations:
+                        self._logger.info(f"Rule '{rule_id}' notification skipped (cooldown active).")
+                    continue
+                if not self.notification_service:
+                    self._logger.warning(
+                        f"Rule '{rule_id}' has notification action, but NotificationService is not attached."
+                    )
+                    continue
+
+                title_raw = action.get("title") or f"Alerta de Regla: {rule_id}"
+                msg_raw = action.get("message") or f"Condición de regla '{rule_id}' cumplida."
+                c = context or {}
+                rendered_title = _format_template_string(title_raw, c)
+                rendered_msg = _format_template_string(msg_raw, c)
+
+                from services.notifications.models import NotificationChannel, NotificationPayload
+                ch_str = str(action.get("channel", "all")).lower()
+                ch_enum = (
+                    NotificationChannel(ch_str)
+                    if ch_str in [x.value for x in NotificationChannel]
+                    else NotificationChannel.ALL
+                )
+                webhook_id = action.get("webhook_id")
+
+                payload = NotificationPayload(
+                    title=rendered_title,
+                    message=rendered_msg,
+                    channel=ch_enum,
+                    webhook_id=webhook_id,
+                    metadata=c,
+                )
+                try:
+                    results = await self.notification_service.send(payload, template_context=c)
+                    await self.event_bus.publish(
+                        topic="rule.notification_sent",
+                        sender=rule_id,
+                        payload={"rule_id": rule_id, "action": action, "results": [r.model_dump() for r in results]},
+                    )
+                except Exception as e:
+                    self._logger.error(f"Error sending notification for rule '{rule_id}': {e}")
+                    all_succeeded = False
+                continue
+
+            # Actuator action handling
             target_id = action.get("device")
             command = action.get("command")
             args = action.get("args", {})

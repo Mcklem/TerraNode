@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Cpu, Radio, RefreshCw, Server, Settings2 } from 'lucide-react'
+import { Cpu, Radio, RefreshCw, Settings2 } from 'lucide-react'
 import type { Health, TerraNode } from '@/lib/terranode-api'
 
 interface HeaderProps {
@@ -49,7 +49,7 @@ export function Header({
 
         <div className="quick-stat">
           <span>NODES</span>
-          <b>
+          <b className={totalNodesCount > 0 && connectedNodesCount === 0 ? 'accent-rose' : connectedNodesCount < totalNodesCount ? 'accent-amber' : ''}>
             {connectedNodesCount}
             <span>/{totalNodesCount}</span>
           </b>
@@ -65,15 +65,6 @@ export function Header({
           <b className="accent-amber">{overridesCount}</b>
         </div>
 
-        <Link
-          href="/firmware-studio"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium border border-border bg-surface-2 text-foreground hover:text-accent hover:border-accent transition-colors"
-          title="Abrir Firmware Studio para configurar y flashear nodos"
-        >
-          <Cpu size={14} className="text-accent" />
-          <span>FIRMWARE</span>
-        </Link>
-
         <button
           type="button"
           className="icon-button"
@@ -85,14 +76,23 @@ export function Header({
           <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
         </button>
 
-        <button
-          type="button"
+        <Link
+          href="/system-manager"
           className="icon-button"
-          title="Configuración de interfaz"
-          aria-label="Configuración"
+          title="Configuración del Sistema (System Manager)"
+          aria-label="Configuración del Sistema"
         >
           <Settings2 size={18} />
-        </button>
+        </Link>
+
+        <Link
+          href="/firmware-studio"
+          className="icon-button"
+          title="Firmware Studio"
+          aria-label="Firmware Studio"
+        >
+          <Cpu size={18} />
+        </Link>
       </div>
     </header>
   )

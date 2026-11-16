@@ -9,8 +9,8 @@ router = APIRouter(prefix="/api/v1/schedules", tags=["Schedules"])
 class ScheduleStateResponse(BaseModel):
     id: str = Field(..., description="ID de la programación (ej. 'riego_matutino_diario')")
     enabled: bool = Field(..., description="Indica si la programación está activa")
-    device: str = Field(..., description="ID del actuador objetivo (ej. 'irrigation_pump')")
-    command: str = Field(..., description="Comando de inicio a ejecutar (ej. 'turn_on', 'set_position')")
+    device: Optional[str] = Field(None, description="ID del actuador objetivo (ej. 'irrigation_pump')")
+    command: Optional[str] = Field(None, description="Comando de inicio a ejecutar (ej. 'turn_on', 'set_position')")
     args: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Parámetros del comando de inicio")
     stop_command: Optional[str] = Field(None, description="Comando de parada a ejecutar tras vencer la duración")
     stop_args: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Parámetros del comando de parada")
@@ -24,6 +24,7 @@ class ScheduleStateResponse(BaseModel):
     last_run_timestamp: Optional[float] = Field(None, description="Timestamp Unix de la última ejecución")
 
     model_config = ConfigDict(
+        extra="ignore",
         json_schema_extra={
             "example": {
                 "id": "riego_matutino_diario",

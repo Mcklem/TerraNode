@@ -25,7 +25,14 @@ class BMP180Sensor(Sensor):
 
     def __init__(self, device_id: str, device_type: str, node: BaseNode, config: Dict[str, Any]):
         super().__init__(device_id, device_type, node, config)
-        self.address = config.get("address", self.BMP180_ADDR)
+        raw_addr = config.get("address", self.BMP180_ADDR)
+        if isinstance(raw_addr, str):
+            try:
+                self.address = int(raw_addr, 16) if raw_addr.lower().startswith("0x") else int(raw_addr)
+            except ValueError:
+                self.address = self.BMP180_ADDR
+        else:
+            self.address = int(raw_addr)
         self.oss = config.get("oss", 0)  # Oversampling setting (0..3)
         self.unit = "°C"
         self._calib: Optional[Dict[str, int]] = None

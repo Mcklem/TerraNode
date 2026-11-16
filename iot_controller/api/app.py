@@ -1,7 +1,8 @@
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import devices, firmware, health, history, nodes, overrides, rules, schedules
+from api.routes import config, devices, events, firmware, health, history, nodes, notifications, overrides, rules, schedules
 
 
 @asynccontextmanager
@@ -20,6 +21,20 @@ async def lifespan(app: FastAPI):
 
 
 tags_metadata = [
+    {
+        "name": "Notifications",
+        "description": (
+            "Servicios de **notificaciones multi-canal** (Telegram Bot, Correo Electrónico SMTP y Webhooks personalizados), "
+            "pruebas de conectividad en vivo y diagnósticos de alertas."
+        ),
+    },
+    {
+        "name": "Configuration",
+        "description": (
+            "Gestión visual y YAML de la **configuración del sistema (`system.yaml`)**, "
+            "validación multi-nivel, diffs automáticos, historial de respaldos y recarga en caliente."
+        ),
+    },
     {
         "name": "Devices",
         "description": (
@@ -113,20 +128,67 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    # Enable CORS for web UI dashboards
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origin_regex=r"https?://.*",
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+    from core.settings import settings
+
+    # Configure CORS according to environment
+    if settings.environment == "development":
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+            allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    else:
+        configured_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=configured_origins or ["http://localhost:3000"],
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-API-Key"],
+        )
+
+    # API Secret Key Authentication Middleware
+    # In development mode, authentication is disabled by default to facilitate local DX and testing
+    enforce_auth = settings.api_secret_key and (
+        settings.environment != "development" or os.getenv("ENFORCE_DEV_AUTH", "false").lower() in ("true", "1")
     )
+    if enforce_auth:
+        from fastapi import Request
+        from fastapi.responses import JSONResponse
+
+        @app.middleware("http")
+        async def api_key_auth_middleware(request: Request, call_next):
+            # Exempt documentation and basic health check
+            path = request.url.path
+            exempt_paths = {"/docs", "/redoc", "/openapi.json", "/api/v1/health", "/favicon.ico"}
+            if path in exempt_paths or request.method == "OPTIONS":
+                return await call_next(request)
+
+            # Check X-API-Key or Authorization: Bearer
+            api_key = request.headers.get("X-API-Key")
+            if not api_key:
+                auth_header = request.headers.get("Authorization", "")
+                if auth_header.startswith("Bearer "):
+                    api_key = auth_header[7:].strip()
+
+            if api_key != settings.api_secret_key:
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Unauthorized: Invalid or missing API Key."},
+                )
+            return await call_next(request)
 
     # Register routers
     app.include_router(health.router)
+    app.include_router(config.router)
+    app.include_router(notifications.router)
     app.include_router(nodes.router)
     app.include_router(devices.router)
     app.include_router(overrides.router)
+    app.include_router(events.router)
     app.include_router(history.router)
     app.include_router(rules.router)
     app.include_router(schedules.router)

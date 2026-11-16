@@ -115,6 +115,17 @@ class FirmwareBuildModel(Base):
     public_params_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
+class ActiveOverrideModel(Base):
+    """Persistent state of active manual device overrides across controller restarts."""
+    __tablename__ = "active_overrides"
+
+    device_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    mode: Mapped[str] = mapped_column(String(32), nullable=False)
+    last_action: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    override_source: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    set_at: Mapped[float] = mapped_column(Float, nullable=False)
+    expires_at: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+
 
 class Database:
     """Thread-safe SQLAlchemy 2.0 ORM Database connection and schema manager."""
@@ -174,13 +185,14 @@ class Database:
             raise RuntimeError("Database engine not initialized. Call initialize() first.")
         return self.SessionFactory()
 
-    async def run_in_session(self, func) -> Any:
+    async def run_in_session(self, func, read_only: bool = False) -> Any:
         """Execute a function inside a managed SQLAlchemy ORM session asynchronously."""
         def _wrapper():
             with self.get_session() as session:
                 try:
                     result = func(session)
-                    session.commit()
+                    if not read_only:
+                        session.commit()
                     return result
                 except Exception:
                     session.rollback()

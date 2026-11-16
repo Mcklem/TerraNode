@@ -72,12 +72,27 @@ class TestFastAPIWebService(unittest.IsolatedAsyncioTestCase):
         self.db.close()
         self.temp_dir.cleanup()
 
-    def test_health_endpoints(self):
+    async def test_health_endpoints(self):
         resp = self.client.get("/api/v1/health")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(data["status"], "OK")
         self.assertEqual(data["total_nodes"], 1)
+        self.assertEqual(data["connected_nodes"], 1)
+        self.assertIn("normalidad", data["message"])
+
+        # Test health status when all nodes are disconnected
+        node = self.nm.get_node("n1")
+        await node.disconnect()
+        resp_dc = self.client.get("/api/v1/health")
+        self.assertEqual(resp_dc.status_code, 200)
+        data_dc = resp_dc.json()
+        self.assertEqual(data_dc["status"], "ERROR")
+        self.assertEqual(data_dc["connected_nodes"], 0)
+        self.assertIn("Sin comunicación hardware", data_dc["message"])
+
+        # Reconnect node
+        await node.connect()
 
     def test_list_nodes_and_details(self):
         resp = self.client.get("/api/v1/nodes")
@@ -261,6 +276,53 @@ class TestFastAPIWebService(unittest.IsolatedAsyncioTestCase):
         data_e = resp_e.json()
         self.assertEqual(data_e["total"], 1)
         self.assertEqual(data_e["data"][0]["sender"], "RuleEngine")
+
+    async def test_api_key_authentication_enforcement(self):
+        """Test API Key authentication middleware under production vs development mode."""
+        from core.settings import settings
+        original_env = settings.environment
+        original_key = settings.api_secret_key
+
+        try:
+            # 1. In production mode with api_secret_key, protected routes require auth
+            settings.environment = "production"
+            settings.api_secret_key = "test-secret-key-123"
+            prod_app = create_app()
+            prod_client = TestClient(prod_app)
+
+            # Health is exempt
+            health_resp = prod_client.get("/api/v1/health")
+            self.assertEqual(health_resp.status_code, 200)
+
+            # Devices route requires auth
+            unauth_resp = prod_client.get("/api/v1/devices")
+            self.assertEqual(unauth_resp.status_code, 401)
+            self.assertIn("Unauthorized", unauth_resp.json()["detail"])
+
+            # Wrong key -> 401
+            wrong_resp = prod_client.get("/api/v1/devices", headers={"X-API-Key": "wrong"})
+            self.assertEqual(wrong_resp.status_code, 401)
+
+            # Correct X-API-Key -> 200
+            auth_resp = prod_client.get("/api/v1/devices", headers={"X-API-Key": "test-secret-key-123"})
+            self.assertEqual(auth_resp.status_code, 200)
+
+            # Correct Bearer token -> 200
+            bearer_resp = prod_client.get(
+                "/api/v1/devices",
+                headers={"Authorization": "Bearer test-secret-key-123"},
+            )
+            self.assertEqual(bearer_resp.status_code, 200)
+
+            # 2. In development mode without ENFORCE_DEV_AUTH, access is permissive
+            settings.environment = "development"
+            dev_app = create_app()
+            dev_client = TestClient(dev_app)
+            dev_resp = dev_client.get("/api/v1/devices")
+            self.assertEqual(dev_resp.status_code, 200)
+        finally:
+            settings.environment = original_env
+            settings.api_secret_key = original_key
 
 
 if __name__ == "__main__":

@@ -32,6 +32,10 @@ class LDRSensor(Sensor):
 
         try:
             raw_val = self.node.analog_read(self.pin)
+            if raw_val is None:
+                # Return last known state if analog packet hasn't arrived yet
+                return self.get_state()
+
             self._last_value = raw_val
 
             # Apply calibration mapping if configured (e.g. dark: 1024, light: 100)

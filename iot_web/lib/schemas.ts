@@ -18,7 +18,7 @@ export const NodeInfoSchema = z.object({
   enabled: z.boolean(),
   status: NodeStatusSchema,
   last_error: z.string().nullable().optional(),
-})
+}).passthrough()
 export type TerraNode = z.infer<typeof NodeInfoSchema>
 
 export const DeviceStateSchema = z.object({
@@ -48,7 +48,7 @@ export const DeviceSchema = z.object({
   control_mode: ControlModeSchema,
   override_active: z.boolean(),
   current_state: DeviceStateSchema,
-})
+}).passthrough()
 export type Device = z.infer<typeof DeviceSchema>
 
 export function isSensor(device: Device): boolean {
@@ -64,6 +64,7 @@ export const HealthSchema = z.object({
   total_nodes: z.number().optional().default(0),
   connected_nodes: z.number().optional().default(0),
   total_devices: z.number().optional().default(0),
+  message: z.string().nullable().optional(),
   report: z.record(z.string(), z.unknown()).optional(),
   nodes: z.record(z.string(), z.unknown()).optional(),
   devices: z.record(z.string(), z.unknown()).optional(),
@@ -205,11 +206,11 @@ export type PaginatedSchedulesHistory = z.infer<typeof PaginatedSchedulesHistory
 export const ScheduleStateSchema = z.object({
   id: z.string(),
   enabled: z.boolean(),
-  device: z.string(),
-  command: z.string(),
-  args: z.record(z.string(), z.unknown()).optional(),
+  device: z.string().optional().nullable(),
+  command: z.string().optional().nullable(),
+  args: z.record(z.string(), z.unknown()).optional().nullable(),
   stop_command: z.string().nullable().optional(),
-  stop_args: z.record(z.string(), z.unknown()).optional(),
+  stop_args: z.record(z.string(), z.unknown()).optional().nullable(),
   duration_seconds: z.number().optional().default(0),
   is_duration_active: z.boolean().optional().default(false),
   run_on_start: z.boolean().optional().default(false),
@@ -218,14 +219,14 @@ export const ScheduleStateSchema = z.object({
   cron: z.string().nullable().optional(),
   days: z.array(z.string()).nullable().optional(),
   last_run_timestamp: z.number().nullable().optional(),
-})
+}).passthrough()
 export type ScheduleState = z.infer<typeof ScheduleStateSchema>
 
 export const TriggerResponseSchema = z.object({
   success: z.boolean(),
   schedule_id: z.string(),
   message: z.string(),
-})
+}).passthrough()
 export type TriggerResponse = z.infer<typeof TriggerResponseSchema>
 
 /* Sensor Rules Schemas */
@@ -235,14 +236,19 @@ export const RuleConditionSchema = z.object({
   property: z.string().optional().default('value'),
   operator: z.string(),
   value: z.unknown(),
-})
+}).passthrough()
 export type RuleCondition = z.infer<typeof RuleConditionSchema>
 
 export const RuleActionSchema = z.object({
-  device: z.string(),
-  command: z.string(),
-  args: z.record(z.string(), z.unknown()).optional(),
-})
+  device: z.string().optional().nullable(),
+  command: z.string().optional().nullable(),
+  args: z.record(z.string(), z.unknown()).optional().nullable(),
+  type: z.string().optional().nullable(),
+  channel: z.string().optional().nullable(),
+  webhook_id: z.string().optional().nullable(),
+  title: z.string().optional().nullable(),
+  message: z.string().optional().nullable(),
+}).passthrough()
 export type RuleAction = z.infer<typeof RuleActionSchema>
 
 export const RuleStateSchema = z.object({
@@ -251,9 +257,11 @@ export const RuleStateSchema = z.object({
   condition: RuleConditionSchema,
   actions: z.array(RuleActionSchema),
   retrigger: z.boolean().optional().default(false),
+  cooldown: z.number().optional().nullable(),
+  recovery_message: z.string().optional().nullable(),
   is_triggered: z.boolean().optional().default(false),
   last_sensor_value: z.unknown().optional().nullable(),
-})
+}).passthrough()
 export type RuleState = z.infer<typeof RuleStateSchema>
 
 /* Firmware Studio Schemas */

@@ -17,11 +17,13 @@ class HealthMonitor:
         device_manager: DeviceManager,
         event_bus: EventBus,
         check_interval: int = 5,
+        override_registry: Optional[Any] = None,
     ):
         self.node_manager = node_manager
         self.device_manager = device_manager
         self.event_bus = event_bus
         self.check_interval = check_interval
+        self.override_registry = override_registry
         self._task: Optional[asyncio.Task] = None
         self._running: bool = False
         self._reconnecting_nodes: set = set()
@@ -88,7 +90,7 @@ class HealthMonitor:
                 asyncio.create_task(self._attempt_node_reconnect(node))
 
     async def _attempt_node_reconnect(self, node) -> None:
-        """Attempt non-blocking reconnection with backoff retry."""
+        """Attempt non-blocking reconnection with backoff retry and state preservation."""
         try:
             success = await node.reconnect()
             if success:
@@ -98,10 +100,34 @@ class HealthMonitor:
                     sender=node.id,
                     payload={"status": NodeStatus.CONNECTED.value},
                 )
-                # Restart devices attached to this node
+                from devices.actuator import Actuator
+                from services.live_command.models import ControlMode
+
+                # Restore devices attached to this node preserving previous desired state
                 for dev in self.device_manager.get_all_devices():
                     if dev.node.id == node.id:
-                        await dev.start()
+                        if isinstance(dev, Actuator):
+                            prev_state = getattr(dev, "_current_state", "OFF")
+                            override_state = (
+                                self.override_registry.get_state(dev.id)
+                                if self.override_registry
+                                else None
+                            )
+
+                            await dev.start()
+
+                            if override_state and override_state.is_override_active():
+                                if override_state.mode == ControlMode.MANUAL_ON:
+                                    await dev.turn_on()
+                                elif override_state.mode == ControlMode.MANUAL_OFF:
+                                    await dev.turn_off()
+                                elif override_state.mode == ControlMode.MANUAL_VALUE:
+                                    if hasattr(dev, "set_position") and hasattr(dev, "_current_angle"):
+                                        await dev.set_position(dev._current_angle)
+                            elif prev_state == "ON":
+                                await dev.turn_on()
+                        else:
+                            await dev.start()
             else:
                 self._logger.warning(f"Reconnection attempt failed for node '{node.id}'.")
         except Exception as e:

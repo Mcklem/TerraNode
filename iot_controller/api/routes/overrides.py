@@ -16,6 +16,7 @@ class OverrideStateResponse(BaseModel):
     expires_at: Optional[float] = Field(None, description="Timestamp de Unix de cuándo expira el override (TTL), o null si es indefinido")
 
     model_config = ConfigDict(
+        extra="ignore",
         json_schema_extra={
             "example": {
                 "device_id": "pump_01",

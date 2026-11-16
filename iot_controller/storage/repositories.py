@@ -2,9 +2,10 @@ import asyncio
 import json
 import time
 from typing import Any, Dict, List, Optional
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 from core.event_bus import Event, EventBus
 from core.node_manager import NodeManager
+from core.settings import settings
 from storage.database import (
     ActuatorHistoryModel,
     Database,
@@ -26,6 +27,7 @@ class StorageManager:
         self._running: bool = False
         self._queue: asyncio.Queue = asyncio.Queue(maxsize=1000)
         self._writer_task: Optional[asyncio.Task] = None
+        self._retention_task: Optional[asyncio.Task] = None
         self._logger = get_logger("StorageManager")
 
     def start(self) -> None:
@@ -34,6 +36,9 @@ class StorageManager:
             return
         self._running = True
         self._writer_task = asyncio.create_task(self._writer_loop())
+
+        if settings.db_auto_purge:
+            self._retention_task = asyncio.create_task(self._retention_loop())
 
         self.event_bus.subscribe("device.value_changed", self._on_measurement)
         self.event_bus.subscribe("command.executed", self._on_command_executed)
@@ -66,6 +71,10 @@ class StorageManager:
         if self._writer_task:
             self._writer_task.cancel()
             self._writer_task = None
+
+        if self._retention_task:
+            self._retention_task.cancel()
+            self._retention_task = None
 
         # Final synchronous flush of leftover items in queue
         self._flush_queue_sync()
@@ -249,6 +258,29 @@ class StorageManager:
             except Exception as e:
                 self._logger.warning(f"Error flushing queue during shutdown: {e}")
 
+    async def _retention_loop(self) -> None:
+        """Periodic background retention worker running every 24 hours."""
+        try:
+            # Wait 60 seconds after startup before initial retention check
+            await asyncio.sleep(60.0)
+        except asyncio.CancelledError:
+            return
+
+        while self._running:
+            try:
+                retention_days = settings.data_retention_days
+                if retention_days > 0:
+                    await self.purge_old_data(retention_days)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                self._logger.error(f"Error in automatic retention worker: {e}")
+
+            try:
+                await asyncio.sleep(86400.0)  # 24 hours
+            except asyncio.CancelledError:
+                break
+
     async def purge_old_data(self, retention_days: int = 30) -> int:
         """Delete historical measurements, events, actuator logs, node logs, and schedule logs older than retention_days."""
         cutoff = time.time() - (retention_days * 86400)
@@ -261,5 +293,19 @@ class StorageManager:
             session.execute(delete(ScheduleHistoryModel).where(ScheduleHistoryModel.timestamp < cutoff))
 
         await self.db.run_in_session(_purge)
+
+        # Truncate WAL file if using SQLite
+        if self.db.database_url.startswith("sqlite") and not self.db.database_url.startswith("sqlite:///:memory:"):
+            try:
+                def _checkpoint():
+                    with self.db.engine.connect() as conn:
+                        conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE);"))
+                        conn.commit()
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, _checkpoint)
+                self._logger.debug("SQLite PRAGMA wal_checkpoint(TRUNCATE) executed successfully.")
+            except Exception as e:
+                self._logger.warning(f"Could not execute SQLite wal_checkpoint: {e}")
+
         self._logger.info(f"Purged historical data older than {retention_days} days via SQLAlchemy ORM.")
         return retention_days

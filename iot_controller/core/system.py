@@ -41,12 +41,16 @@ class ControllerSystem:
         self.override_registry: Optional[Any] = None
         self.command_dispatcher: Optional[Any] = None
         self.live_command_service: Optional[Any] = None
+        self.notification_service: Optional[Any] = None
         self.rule_engine: Optional[RuleEngine] = None
         self.time_scheduler: Optional[Any] = None
         self.health_monitor: Optional[HealthMonitor] = None
         self.api_server: Optional[Any] = None
         self.api_task: Optional[asyncio.Task] = None
         self._running: bool = False
+
+        from config_manager.service import ConfigManagerService
+        self.config_manager = ConfigManagerService(self.config_path)
 
     async def start(self) -> None:
         """Execute the 14-step startup sequence."""
@@ -80,7 +84,7 @@ class ControllerSystem:
 
         # 10. Initialize Live Command & Override Service Layer
         from services.live_command import CommandDispatcher, LiveCommandService, OverrideRegistry
-        self.override_registry = OverrideRegistry()
+        self.override_registry = OverrideRegistry(db=self.db, event_bus=self.event_bus)
         self.command_dispatcher = CommandDispatcher(
             device_manager=self.device_manager,
             override_registry=self.override_registry,
@@ -93,6 +97,11 @@ class ControllerSystem:
             dispatcher=self.command_dispatcher,
         )
 
+        # 10.5. Initialize Notification Service
+        from services.notifications import NotificationService
+        notif_cfg = self.config.get("notifications", {})
+        self.notification_service = NotificationService(notif_cfg)
+
         # 11. Rule Engine & Time Scheduler
         rules_cfg = self.config.get("rules", {})
         log_rule_evaluations = sys_cfg.get("log_rule_evaluations", settings.log_rule_evaluations)
@@ -102,6 +111,7 @@ class ControllerSystem:
             self.event_bus,
             log_rule_evaluations=log_rule_evaluations,
             command_dispatcher=self.command_dispatcher,
+            notification_service=self.notification_service,
         )
 
         from automation.time_scheduler import TimeScheduler
@@ -114,7 +124,12 @@ class ControllerSystem:
         )
 
         # 12. Health Monitor
-        self.health_monitor = HealthMonitor(self.node_manager, self.device_manager, self.event_bus)
+        self.health_monitor = HealthMonitor(
+            self.node_manager,
+            self.device_manager,
+            self.event_bus,
+            override_registry=self.override_registry,
+        )
 
         # Populate API System Container early so API can serve endpoints immediately
         from api.dependencies import system_container
@@ -126,7 +141,13 @@ class ControllerSystem:
         system_container.override_registry = self.override_registry
         system_container.time_scheduler = self.time_scheduler
         system_container.rule_engine = self.rule_engine
+        system_container.notification_service = self.notification_service
+        system_container.notification_service = self.notification_service
         system_container.db = self.db
+        system_container.system = self
+        system_container.config_manager = self.config_manager
+        self.config_manager.runtime_checksum = self.config_manager.get_file_checksum()
+        self.config_manager.last_applied_at = None
 
         # Start FastAPI Web Service early if enabled in settings
         if settings.enable_api:
@@ -179,6 +200,187 @@ class ControllerSystem:
             f"System '{sys_cfg.get('name', 'iot_controller')}' v{sys_cfg.get('version', '1.0')} is READY!"
         )
         self.logger.info("=" * 60)
+
+    async def reload(self) -> Dict[str, Any]:
+        """
+        Gracefully reload hardware subsystems from saved configuration file
+        without restarting the FastAPI web server.
+        """
+        from datetime import datetime
+        self.logger.info("Initiating dynamic configuration reload...")
+        loop = asyncio.get_running_loop()
+        start_time = loop.time()
+
+        # 1. Stop active hardware subsystems (excluding api_server & db)
+        if self.health_monitor:
+            try:
+                await self.health_monitor.stop()
+            except Exception as e:
+                self.logger.warning(f"Error stopping HealthMonitor during reload: {e}")
+
+        if self.time_scheduler:
+            try:
+                self.time_scheduler.stop()
+            except Exception as e:
+                self.logger.warning(f"Error stopping TimeScheduler during reload: {e}")
+
+        if self.rule_engine:
+            try:
+                self.rule_engine.stop()
+            except Exception as e:
+                self.logger.warning(f"Error stopping RuleEngine during reload: {e}")
+
+        if self.scheduler:
+            try:
+                await self.scheduler.stop()
+            except Exception as e:
+                self.logger.warning(f"Error stopping Scheduler during reload: {e}")
+
+        if self.device_manager:
+            try:
+                await self.device_manager.stop_all()
+            except Exception as e:
+                self.logger.warning(f"Error stopping devices during reload: {e}")
+
+        if self.node_manager:
+            try:
+                await self.node_manager.disconnect_all()
+            except Exception as e:
+                self.logger.warning(f"Error disconnecting nodes during reload: {e}")
+
+        # 2. Reset managers
+        self.pin_manager.reset()
+        self.node_manager = NodeManager()
+        self.device_manager = DeviceManager(self.node_manager, self.pin_manager, DEVICE_REGISTRY)
+        self.scheduler = Scheduler(self.device_manager, self.event_bus)
+
+        # 3. Reload and validate new configuration
+        loader = ConfigLoader(self.config_path)
+        self.config = loader.load()
+        sys_cfg = self.config.get("system", {})
+
+        # 4. Re-create nodes
+        nodes_cfg = self.config.get("nodes", {})
+        for node_id, node_cfg in nodes_cfg.items():
+            if self.use_mock:
+                node_cfg = dict(node_cfg)
+                node_cfg["driver"] = "mock"
+            self.node_manager.create_node(node_id, node_cfg)
+
+        # 5. Re-create devices
+        devices_cfg = self.config.get("devices", {})
+        self.device_manager.initialize_devices(devices_cfg)
+
+        # 6. Re-create live command & override layers
+        from services.live_command import CommandDispatcher, LiveCommandService, OverrideRegistry
+        self.override_registry = OverrideRegistry(db=self.db, event_bus=self.event_bus)
+        self.command_dispatcher = CommandDispatcher(
+            device_manager=self.device_manager,
+            override_registry=self.override_registry,
+            event_bus=self.event_bus,
+        )
+        self.live_command_service = LiveCommandService(
+            device_manager=self.device_manager,
+            node_manager=self.node_manager,
+            override_registry=self.override_registry,
+            dispatcher=self.command_dispatcher,
+        )
+
+        # 6.5. Re-create Notification Service
+        from services.notifications import NotificationService
+        notif_cfg = self.config.get("notifications", {})
+        self.notification_service = NotificationService(notif_cfg)
+
+        # 7. Re-create Rule Engine and Time Scheduler
+        rules_cfg = self.config.get("rules", {})
+        log_rule_evaluations = sys_cfg.get("log_rule_evaluations", settings.log_rule_evaluations)
+        self.rule_engine = RuleEngine(
+            rules_cfg,
+            self.device_manager,
+            self.event_bus,
+            log_rule_evaluations=log_rule_evaluations,
+            command_dispatcher=self.command_dispatcher,
+            notification_service=self.notification_service,
+        )
+
+        from automation.time_scheduler import TimeScheduler
+        schedules_cfg = self.config.get("schedules", {})
+        self.time_scheduler = TimeScheduler(
+            schedules_cfg,
+            self.device_manager,
+            self.event_bus,
+            self.command_dispatcher,
+        )
+
+        # 8. Re-create Health Monitor
+        self.health_monitor = HealthMonitor(
+            self.node_manager,
+            self.device_manager,
+            self.event_bus,
+            override_registry=self.override_registry,
+        )
+
+        # 9. Update dependencies in system_container
+        from api.dependencies import system_container
+        system_container.device_manager = self.device_manager
+        system_container.node_manager = self.node_manager
+        system_container.pin_manager = self.pin_manager
+        system_container.health_monitor = self.health_monitor
+        system_container.live_command_service = self.live_command_service
+        system_container.override_registry = self.override_registry
+        system_container.time_scheduler = self.time_scheduler
+        system_container.rule_engine = self.rule_engine
+        system_container.notification_service = self.notification_service
+
+        # 10. Reconnect nodes & start subsystems
+        try:
+            await asyncio.wait_for(self.node_manager.connect_all(), timeout=4.0)
+        except (asyncio.TimeoutError, TimeoutError):
+            self.logger.warning(
+                "Node reconnection taking longer than 4.0s during reload; "
+                "continuing subsystem initialization while background health monitor handles reconnection."
+            )
+        except Exception as e:
+            self.logger.warning(f"Error reconnecting nodes during reload: {e}")
+
+        for node in self.node_manager.get_all_nodes():
+            if node.is_connected():
+                await self.event_bus.publish(
+                    "node.status_changed",
+                    sender=node.id,
+                    payload={"status": "CONNECTED"},
+                )
+
+        await self.device_manager.start_all()
+
+        log_readings = sys_cfg.get("log_readings", settings.log_readings)
+        self.scheduler.log_readings = log_readings
+        await self.scheduler.start()
+        self.rule_engine.start()
+        self.time_scheduler.start()
+        await self.health_monitor.start()
+
+        # 11. Update checksums & metadata
+        now_iso = datetime.now().isoformat()
+        current_checksum = self.config_manager.get_file_checksum()
+        self.config_manager.runtime_checksum = current_checksum
+        self.config_manager.last_applied_at = now_iso
+
+        elapsed = loop.time() - start_time
+        self.logger.info(f"Dynamic configuration reload complete in {elapsed:.2f}s.")
+
+        return {
+            "success": True,
+            "reloaded_at": now_iso,
+            "runtime_checksum": current_checksum,
+            "elapsed_seconds": round(elapsed, 3),
+            "counts": {
+                "nodes": len(self.node_manager.get_all_nodes()),
+                "devices": len(self.device_manager.get_all_devices()),
+                "rules": len(rules_cfg),
+                "schedules": len(schedules_cfg),
+            },
+        }
 
     async def stop(self) -> None:
         """Graceful shutdown of all subsystems."""

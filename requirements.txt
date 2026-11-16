@@ -1,2 +1,1 @@
-pymata4
-mcp>=1.0.0
+-r iot_controller/requirements.txt

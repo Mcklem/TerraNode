@@ -216,22 +216,71 @@ Sin embargo, para su paso a producción agrícola o comercial, existen **vulnera
 
 ## 🚀 Backlog de Ingeniería por Fases
 
-### Fase 1: Seguridad Crítica y Protección Física de Hardware (INMEDIATA)
+### Fase 1: Seguridad Crítica y Protección Física de Hardware (COMPLETADA)
 *Objetivo: Evitar daños materiales en la instalación física y cerrar vectores de ataque directos.*
 
-- [ ] **[SEC-01] Protección de API REST y MCP con Autenticación**
-  - [ ] Implementar middleware de API Key en FastAPI con cabecera `X-API-Key` o `Authorization: Bearer`.
-  - [ ] Configurar `API_SECRET_KEY` en `.env` y validación centralizada.
-  - [ ] Actualizar proxy de Next.js ([iot_web/app/api/terranode/[...path]/route.ts](file:///c:/Users/Player%201/Desktop/Python%20Files/TerraNode/iot_web/app/api/terranode/%5B...path%5D/route.ts)) para inyectar la clave en peticiones salientes.
-  - [ ] Permitir endpoints públicos mínimos (`/api/v1/health` en modo ping básico).
+- [x] **[SEC-01] Protección de API REST y MCP con Autenticación**
+  - [x] Implementar middleware de API Key en FastAPI con cabecera `X-API-Key` o `Authorization: Bearer`.
+  - [x] Configurar `API_SECRET_KEY` en `.env` y validación centralizada.
+  - [x] Actualizar proxy de Next.js (`iot_web/app/api/terranode/[...path]/route.ts`) para inyectar la clave en peticiones salientes.
+  - [x] Permitir endpoints públicos mínimos (`/api/v1/health`, `/docs`, `/openapi.json`).
 
-- [ ] **[IOT-01] Corrección de Estado Seguro en Relés Active-Low**
-  - [ ] Modificar `SecureStandardFirmataWiFi.ino`: en `systemResetCallback()`, configurar los pines de salida en estado `HIGH` para evitar que los relés active-low se cierren al perder señal WiFi o reiniciar.
-  - [ ] En [devices/actuators/relay.py:L18](file:///c:/Users/Player%201/Desktop/Python%20Files/TerraNode/iot_controller/devices/actuators/relay.py#L18), escribir el valor de reposo (`HIGH` en active-low) inmediatamente al inicializar para eliminar el pulso o glitch transitorio.
+- [x] **[IOT-01] Corrección de Estado Seguro en Relés Active-Low**
+  - [x] Modificar `SecureStandardFirmataWiFi.ino`: en `systemResetCallback()`, configurar los pines digitales en estado seguro `PIN_MODE_PULLUP` para evitar que los relés active-low se cierren al perder señal WiFi o reiniciar.
+  - [x] En `devices/actuators/relay.py` y `led.py`, escribir el valor de reposo (`HIGH` en active-low) inmediatamente al inicializar para eliminar el pulso o glitch transitorio.
 
-- [ ] **[IOT-02] Protección de Estado Físico en Reconexiones**
-  - [ ] Modificar `HealthMonitor._attempt_node_reconnect` en [monitoring/health.py](file:///c:/Users/Player%201/Desktop/Python%20Files/TerraNode/iot_controller/monitoring/health.py): tras reconectar el nodo, no invocar `dev.start()` a ciegas (que apaga los relés).
-  - [ ] Consultar el estado deseado en `OverrideRegistry` y restaurar el estado que tenía el actuador antes de la desconexión.
+- [x] **[IOT-02] Protección de Estado Físico en Reconexiones**
+  - [x] Modificar `HealthMonitor._attempt_node_reconnect` en `monitoring/health.py`: tras reconectar el nodo, no invocar `dev.start()` a ciegas (que apaga los relés).
+  - [x] Consultar el estado deseado en `OverrideRegistry` y restaurar el estado que tenía el actuador antes de la desconexión.
+
+---
+
+### Fase 2: Persistencia, Resiliencia y Tolerancia a Fallos (COMPLETADA)
+*Objetivo: Garantizar que el sistema sobreviva a reinicios sin descontrol de riego ni pérdida de auditoría.*
+
+- [x] **[SEC-02] Soporte de Variables de Entorno en `system.yaml` (Interpolación de Secretos)**
+  - [x] Extender `ConfigLoader` (`core/config.py`) con un resolver regex que soporte sintaxis `${VAR_NAME:-default}`.
+  - [x] Mover `auth_key` y credenciales sensibles a variables de entorno en `.env` y documentar en `.env.example`.
+
+- [x] **[REL-01] Persistencia de Overrides y Tareas de Calendario**
+  - [x] Crear tabla `active_overrides` en SQLAlchemy para almacenar el modo de control (`AUTO`, `MANUAL_ON`, etc.), fuente y expiración TTL de cada dispositivo.
+  - [x] Modificar `OverrideRegistry` para leer/guardar cambios en base de datos y emitir `override.expired` cuando venza un TTL.
+
+- [x] **[CON-01] Cancelación Limpia de Temporizadores en `TimeScheduler`**
+  - [x] Cancelar explícitamente tareas activas previas antes de asignar un nuevo timer para un mismo `schedule_id`.
+  - [x] Prevenir desregistro erróneo verificando `asyncio.current_task()` en bloque `finally`.
+
+- [x] **[IOT-03] Guardia contra Lectura `None` en Sensores ADC**
+  - [x] Añadir validación `if raw_val is None: return self.get_state()` en `soil_moisture.py` y `ldr.py`.
+
+- [x] **[AUT-01] Histéresis (Deadband) en Motor de Reglas**
+  - [x] Extender `automation/conditions.py` y `rule_engine.py` para soportar parámetro `hysteresis` en umbrales `<` y `>`, eliminando el chattering destructivo en relés.
+
+---
+
+### Fase 3: Rendimiento, Escalabilidad y Protocolos de Red (EN PROCESO)
+
+- [x] **[PERF-01] Server-Sent Events (SSE) en Backend**
+  - [x] Implementado endpoint `GET /api/v1/events/stream` en `api/routes/events.py` conectado al `EventBus`.
+  - [ ] Conectar suscripción SSE en `use-terranode.ts` para eliminar polling continuo en clientes web activos.
+
+- [x] **[PERF-02] Búfer de Lectura en Sockets TCP**
+  - [x] Modificar `FirmataNode._safe_tcp_receiver` para leer búferes de 128 bytes con `extend`, reduciendo las llamadas al sistema en un 90%.
+
+- [x] **[DAT-01] Retención Automatizada en SQLite y WAL Checkpoint**
+  - [x] Tarea periódica de purga histórica cada 24 horas en `StorageManager` y ejecución de `PRAGMA wal_checkpoint(TRUNCATE)`.
+  - [x] Separación de sesiones `read_only=True` en `Database.run_in_session` para consultas históricas.
+
+---
+
+### Fase 4: Observabilidad, DevOps y Mantenimiento Continuo (CARRY-ON)
+
+- [x] **[OPS-01] Integración de Alembic para Control de Esquemas**
+  - [x] Configurado `alembic` en `storage/migrations` con migración inicial generada y aplicada.
+- [ ] **[DEV-01] Contenerización Docker y Fijación de Dependencias (CARRY-ON BACKLOG)**
+  - [ ] Crear `Dockerfile` multi-stage para backend y frontend.
+  - [ ] Crear `docker-compose.yml` para arranque unificado con proxy inverso Nginx.
+  - [ ] Fijar versiones exactas con `requirements.lock` o `poetry.lock`.
 
 ---
 

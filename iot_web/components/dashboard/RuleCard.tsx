@@ -1,6 +1,6 @@
 'use client'
 
-import { Activity, Cpu, Pause, Power, Zap } from 'lucide-react'
+import { Activity, Bell, Cpu, Pause, Power, Zap } from 'lucide-react'
 import type { RuleState } from '@/lib/schemas'
 
 interface RuleCardProps {
@@ -93,6 +93,15 @@ export function RuleCard({ rule, busyId, onToggle }: RuleCardProps) {
               {formatValue(rule.last_sensor_value)}
             </strong>
           </div>
+
+          {rule.cooldown != null && rule.cooldown > 0 && (
+            <div className="flex justify-between items-center pt-1 border-t border-[var(--border)]/40 text-[10px]">
+              <span>COOLDOWN:</span>
+              <span className="text-purple-400 font-mono font-semibold">
+                {rule.cooldown}s
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Associated Actions Box */}
@@ -104,15 +113,31 @@ export function RuleCard({ rule, busyId, onToggle }: RuleCardProps) {
           {rule.actions.length === 0 ? (
             <p className="text-[10px] text-[var(--muted-foreground)]">Sin acciones asociadas</p>
           ) : (
-            <div className="space-y-1 pt-0.5">
-              {rule.actions.map((act, idx) => (
-                <div key={idx} className="flex justify-between items-center text-[10px]">
-                  <span className="text-[var(--foreground)] font-semibold">{act.device}</span>
-                  <span className="text-emerald-400 font-mono font-bold">
-                    {act.command} {act.args && Object.keys(act.args).length > 0 ? JSON.stringify(act.args) : ''}
-                  </span>
-                </div>
-              ))}
+            <div className="space-y-1.5 pt-0.5">
+              {rule.actions.map((act, idx) => {
+                const isNotification = act.type === 'notification' || !!act.channel
+                if (isNotification) {
+                  return (
+                    <div key={idx} className="flex justify-between items-center text-[10px] bg-purple-950/20 px-1.5 py-0.5 rounded border border-purple-500/20">
+                      <span className="text-purple-400 font-semibold flex items-center gap-1">
+                        <Bell size={10} /> {(act.channel || 'alert').toUpperCase()}
+                      </span>
+                      <span className="text-[var(--foreground)] font-mono truncate max-w-[170px]" title={act.title || act.message || ''}>
+                        {act.title || act.message || 'Notificación'}
+                      </span>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div key={idx} className="flex justify-between items-center text-[10px]">
+                    <span className="text-[var(--foreground)] font-semibold">{act.device}</span>
+                    <span className="text-emerald-400 font-mono font-bold">
+                      {act.command} {act.args && Object.keys(act.args).length > 0 ? JSON.stringify(act.args) : ''}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>

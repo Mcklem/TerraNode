@@ -101,7 +101,7 @@ system:
 nodes:
   soil_01:
     driver: secure_standard_firmata_wifi
-    auth_key: CFNQvkNfttUdekyjAct0
+    auth_key: ${NODE_ONE_AUTH_KEY:-test_dummy_key_12345}
     use_tls: false
     host: 192.168.1.107
     port: 3030

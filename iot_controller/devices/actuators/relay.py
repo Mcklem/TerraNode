@@ -15,6 +15,12 @@ class RelayActuator(Actuator):
 
     async def start(self) -> None:
         try:
+            # For active-low modules, write safe OFF state (HIGH) immediately to prevent transient electrical click
+            off_val = 1 if self.active_low else 0
+            try:
+                self.node.digital_write(self.pin, off_val)
+            except Exception:
+                pass
             self.node.set_pin_mode_digital_output(self.pin)
             await self.turn_off()
             self.set_status(DeviceStatus.OK)
@@ -27,8 +33,8 @@ class RelayActuator(Actuator):
     async def stop(self) -> None:
         try:
             await self.turn_off()
-        except Exception:
-            pass
+        except Exception as e:
+            self._logger.warning(f"Error turning off Relay {self.id} on stop: {e}")
 
     async def turn_on(self) -> Dict[str, Any]:
         if not self.node.is_connected():

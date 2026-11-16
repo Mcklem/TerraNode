@@ -135,7 +135,7 @@ async def get_measurements_history(
         records = session.scalars(stmt_data.limit(limit).offset(offset)).all()
         return total, records
 
-    total, records = await db.run_in_session(_query)
+    total, records = await db.run_in_session(_query, read_only=True)
     return {
         "total": total,
         "limit": limit,
@@ -172,7 +172,7 @@ async def get_actuators_history(
         records = session.scalars(stmt_data.limit(limit).offset(offset)).all()
         return total, records
 
-    total, records = await db.run_in_session(_query)
+    total, records = await db.run_in_session(_query, read_only=True)
     return {
         "total": total,
         "limit": limit,
@@ -205,7 +205,7 @@ async def get_nodes_history(
         records = session.scalars(stmt_data.limit(limit).offset(offset)).all()
         return total, records
 
-    total, records = await db.run_in_session(_query)
+    total, records = await db.run_in_session(_query, read_only=True)
     return {
         "total": total,
         "limit": limit,
@@ -242,7 +242,7 @@ async def get_schedules_history(
         records = session.scalars(stmt_data.limit(limit).offset(offset)).all()
         return total, records
 
-    total, records = await db.run_in_session(_query)
+    total, records = await db.run_in_session(_query, read_only=True)
     return {
         "total": total,
         "limit": limit,
@@ -275,7 +275,7 @@ async def get_events_history(
         records = session.scalars(stmt_data.limit(limit).offset(offset)).all()
         return total, records
 
-    total, records = await db.run_in_session(_query)
+    total, records = await db.run_in_session(_query, read_only=True)
     return {
         "total": total,
         "limit": limit,
@@ -306,6 +306,21 @@ async def purge_history(
         session.execute(delete(ScheduleHistoryModel).where(ScheduleHistoryModel.timestamp < cutoff))
 
     await db.run_in_session(_purge)
+
+    # Reclaim WAL disk space
+    if db.database_url.startswith("sqlite") and not db.database_url.startswith("sqlite:///:memory:"):
+        try:
+            import asyncio
+            from sqlalchemy import text
+            def _checkpoint():
+                with db.engine.connect() as conn:
+                    conn.execute(text("PRAGMA wal_checkpoint(TRUNCATE);"))
+                    conn.commit()
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, _checkpoint)
+        except Exception:
+            pass
+
     return {
         "success": True,
         "retention_days": retention_days,

@@ -1,6 +1,18 @@
 import os
+import re
 from typing import Any, Dict
 import yaml
+
+ENV_VAR_PATTERN = re.compile(r'\$\{([A-Za-z0-9_]+)(?::-(.*?))?\}')
+
+
+def interpolate_env_vars(raw_text: str) -> str:
+    """Replaces ${VAR_NAME} or ${VAR_NAME:-default} with environment variable values."""
+    def _replace(match):
+        var_name = match.group(1)
+        default_val = match.group(2) if match.group(2) is not None else ""
+        return os.getenv(var_name, default_val)
+    return ENV_VAR_PATTERN.sub(_replace, raw_text)
 
 
 class ConfigurationError(Exception):
@@ -22,7 +34,9 @@ class ConfigLoader:
 
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
-                self.raw_config = yaml.safe_load(f) or {}
+                content = f.read()
+            interpolated = interpolate_env_vars(content)
+            self.raw_config = yaml.safe_load(interpolated) or {}
         except yaml.YAMLError as e:
             raise ConfigurationError(f"YAML syntax error in '{self.config_path}': {e}")
 

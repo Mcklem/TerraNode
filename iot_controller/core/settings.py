@@ -1,6 +1,7 @@
 import os
 import logging
 from dataclasses import dataclass
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -26,6 +27,13 @@ class Settings:
     enable_api: bool = os.getenv("ENABLE_API", "false").lower() in ("true", "1", "yes")
     api_host: str = os.getenv("API_HOST", "0.0.0.0")
     api_port: int = int(os.getenv("API_PORT", "8000"))
+    api_secret_key: Optional[str] = os.getenv("API_SECRET_KEY", "").strip() or None
+    environment: str = os.getenv("ENVIRONMENT", "development").lower()
+    cors_origins: str = os.getenv("CORS_ORIGINS", "")
+
+    # Storage retention settings
+    data_retention_days: int = int(os.getenv("DATA_RETENTION_DAYS", "30"))
+    db_auto_purge: bool = os.getenv("DB_AUTO_PURGE", "true").lower() in ("true", "1", "yes")
 
     # MCP (Model Context Protocol) Server settings
     enable_mcp: bool = os.getenv("ENABLE_MCP", "false").lower() in ("true", "1", "yes")

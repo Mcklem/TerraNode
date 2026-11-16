@@ -245,6 +245,7 @@ class TimeScheduler:
         self, schedule_id: str, device_id: str, stop_command: str, stop_args: dict, duration: float
     ) -> None:
         """Background duration timer that executes stop_command after duration seconds."""
+        current_task = asyncio.current_task()
         try:
             self._logger.info(
                 f"Schedule '{schedule_id}' [DURATION TIMER]: Active for {duration}s on '{device_id}'"
@@ -280,7 +281,8 @@ class TimeScheduler:
         except Exception as e:
             self._logger.error(f"Error in duration timer for schedule '{schedule_id}': {e}")
         finally:
-            self._active_duration_tasks.pop(schedule_id, None)
+            if self._active_duration_tasks.get(schedule_id) is current_task:
+                self._active_duration_tasks.pop(schedule_id, None)
 
     def get_schedule_states(self) -> List[Dict[str, Any]]:
         """Return human-readable status reports for all schedules."""

@@ -73,7 +73,7 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  padding: 18px 5vw;
+  padding: 16px max(3vw, calc((100vw - 1920px) / 2 + 3vw));
   border-bottom: 1px solid var(--border);
   background: rgba(7, 16, 20, 0.88);
   backdrop-filter: blur(16px);
@@ -191,6 +191,10 @@ button {
   color: #f9bb57;
 }
 
+.accent-rose {
+  color: var(--destructive);
+}
+
 .icon-button,
 .modal-head button {
   background: transparent;
@@ -203,9 +207,11 @@ button {
 }
 
 .shell {
-  width: min(1180px, 90vw);
-  margin: auto;
-  padding: 52px 0 80px;
+  width: 100%;
+  max-width: 1920px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 36px 3vw 80px;
 }
 
 .hero-row {
@@ -293,6 +299,12 @@ button {
 .device-icon.amber {
   color: #f9bb57;
   background: #2b2111;
+}
+
+.health-icon.rose,
+.device-icon.rose {
+  color: var(--destructive);
+  background: #2b1111;
 }
 
 .health-card p {
@@ -417,11 +429,16 @@ button {
   background: #0e2a31;
 }
 
-.node-grid,
+.node-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(520px, 1fr));
+  gap: 16px;
+}
+
 .device-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
 }
 
 .node-card {
@@ -489,10 +506,6 @@ button {
 
 .pin-button {
   color: var(--accent);
-}
-
-.device-grid {
-  grid-template-columns: repeat(3, 1fr);
 }
 
 .device-card {
@@ -957,6 +970,12 @@ button {
   margin-top: 22px;
 }
 
+@media (max-width: 1150px) {
+  .health-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 900px) {
   .device-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -980,7 +999,7 @@ button {
 
 @media (max-width: 620px) {
   .topbar {
-    padding: 14px 5vw;
+    padding: 14px 4vw;
   }
   .brand h1 {
     font-size: 14px;
@@ -989,7 +1008,9 @@ button {
     display: none;
   }
   .shell {
-    padding-top: 34px;
+    padding-top: 24px;
+    padding-left: 4vw;
+    padding-right: 4vw;
   }
   .hero-row {
     align-items: flex-start;
