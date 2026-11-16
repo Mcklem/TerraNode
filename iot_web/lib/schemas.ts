@@ -255,3 +255,102 @@ export const RuleStateSchema = z.object({
   last_sensor_value: z.unknown().optional().nullable(),
 })
 export type RuleState = z.infer<typeof RuleStateSchema>
+
+/* Firmware Studio Schemas */
+
+export const BoardProfileSchema = z.object({
+  fqbn: z.string(),
+  name: z.string().optional().nullable(),
+  architecture: z.string().optional().nullable(),
+  flash_size: z.string().optional().nullable(),
+})
+export type BoardProfile = z.infer<typeof BoardProfileSchema>
+
+export const ParameterOptionSchema = z.object({
+  value: z.union([z.string(), z.number()]),
+  label: z.string(),
+})
+export type ParameterOption = z.infer<typeof ParameterOptionSchema>
+
+export const FirmwareParameterSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  type: z.enum([
+    'string',
+    'password',
+    'secret',
+    'ip',
+    'port',
+    'number',
+    'boolean',
+    'select',
+    'pin',
+    'interval',
+  ]),
+  required: z.boolean().optional().default(true),
+  default: z.unknown().optional().nullable(),
+  sensitive: z.boolean().optional().default(false),
+  description: z.string().optional().nullable(),
+  min: z.number().optional().nullable(),
+  max: z.number().optional().nullable(),
+  step: z.number().optional().nullable(),
+  min_length: z.number().optional().nullable(),
+  max_length: z.number().optional().nullable(),
+  options: z.array(ParameterOptionSchema).optional().nullable(),
+  validation_regex: z.string().optional().nullable(),
+})
+export type FirmwareParameter = z.infer<typeof FirmwareParameterSchema>
+
+export const FirmwareDependencySchema = z.object({
+  name: z.string(),
+  version: z.string().optional().nullable(),
+})
+
+export const FirmwareBuildOptionsSchema = z.object({
+  optimize: z.boolean().optional().default(true),
+  cpu_freq: z.number().optional().nullable(),
+  flash_mode: z.string().optional().nullable(),
+})
+
+export const FirmwareManifestSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  version: z.string(),
+  category: z.string().optional().default('firmata'),
+  author: z.string().optional().nullable(),
+  board: BoardProfileSchema,
+  upload_methods: z.array(z.string()).optional().default(['web_serial', 'binary_download', 'source_download']),
+  parameters: z.array(FirmwareParameterSchema).optional().default([]),
+  dependencies: z.array(FirmwareDependencySchema).optional().default([]),
+  build: FirmwareBuildOptionsSchema.optional().default({ optimize: true }),
+  readme: z.string().optional().nullable(),
+})
+export type FirmwareManifest = z.infer<typeof FirmwareManifestSchema>
+
+export const BuildRecordSchema = z.object({
+  id: z.string(),
+  timestamp: z.number(),
+  template_id: z.string(),
+  template_version: z.string(),
+  target_fqbn: z.string(),
+  status: z.string(),
+  status_message: z.string().optional().nullable(),
+  compiler_output: z.string().optional().nullable(),
+  binary_filename: z.string().optional().nullable(),
+  binary_size_bytes: z.number().optional().nullable(),
+  checksum_sha256: z.string().optional().nullable(),
+  completed_at: z.number().optional().nullable(),
+  public_params: z.record(z.string(), z.unknown()).optional().nullable(),
+  generated_files_count: z.number().optional(),
+})
+export type BuildRecord = z.infer<typeof BuildRecordSchema>
+
+export const PaginatedFirmwareHistorySchema = z.object({
+  total: z.number(),
+  limit: z.number(),
+  offset: z.number(),
+  builds: z.array(BuildRecordSchema),
+})
+export type PaginatedFirmwareHistory = z.infer<typeof PaginatedFirmwareHistorySchema>
+

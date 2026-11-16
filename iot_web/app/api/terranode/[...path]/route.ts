@@ -42,14 +42,18 @@ async function forward(request: NextRequest, pathParts: string[]) {
 
   const body = request.method === 'POST' ? await request.text() : undefined
 
+  // Mayor tiempo de espera para operaciones de compilación de firmware
+  const isFirmwareBuild = pathParts.includes('firmware') && pathParts.includes('compile')
+  const timeoutMs = isFirmwareBuild ? 120000 : 15000
+
   const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 6000)
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
     const response = await fetch(targetUrl.toString(), {
       method: request.method,
       headers: {
-        Accept: 'application/json',
+        Accept: '*/*',
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       body,
@@ -58,6 +62,27 @@ async function forward(request: NextRequest, pathParts: string[]) {
     })
 
     clearTimeout(timeoutId)
+
+    const contentType = response.headers.get('content-type') || ''
+
+    // Si es un archivo binario o zip descargable, pasar el stream con sus cabeceras
+    if (
+      contentType.includes('application/octet-stream') ||
+      contentType.includes('application/zip') ||
+      contentType.includes('application/x-zip')
+    ) {
+      const headers = new Headers()
+      headers.set('Content-Type', contentType)
+      const disposition = response.headers.get('content-disposition')
+      if (disposition) headers.set('Content-Disposition', disposition)
+      const len = response.headers.get('content-length')
+      if (len) headers.set('Content-Length', len)
+
+      return new NextResponse(response.body, {
+        status: response.status,
+        headers,
+      })
+    }
 
     const data = await response.json().catch(() => ({ detail: 'Respuesta con formato no válido del controlador' }))
     return NextResponse.json(data, { status: response.status })
@@ -73,4 +98,5 @@ async function forward(request: NextRequest, pathParts: string[]) {
       { status: 503 }
     )
   }
+
 }

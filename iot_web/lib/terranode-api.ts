@@ -17,6 +17,9 @@ import {
   ScheduleStateSchema,
   RuleStateSchema,
   TriggerResponseSchema,
+  FirmwareManifestSchema,
+  BuildRecordSchema,
+  PaginatedFirmwareHistorySchema,
   isSensor,
   isActuator,
   type Mode,
@@ -38,6 +41,10 @@ import {
   type ScheduleState,
   type RuleState,
   type TriggerResponse,
+  type FirmwareManifest,
+  type FirmwareParameter,
+  type BuildRecord,
+  type PaginatedFirmwareHistory,
 } from './schemas'
 
 export { isSensor, isActuator }
@@ -67,7 +74,12 @@ export type {
   ScheduleState,
   RuleState,
   TriggerResponse,
+  FirmwareManifest,
+  FirmwareParameter,
+  BuildRecord,
+  PaginatedFirmwareHistory,
 }
+
 
 export const apiFetch = async <T>(
   path: string,
@@ -299,3 +311,64 @@ export const deviceAction = (device: Device): string => {
   }
   return 'set_position'
 }
+
+/* ==============================================================================
+ * FIRMWARE STUDIO API CLIENT FUNCTIONS
+ * ============================================================================== */
+
+export const fetchFirmwareTemplates = (signal?: AbortSignal) =>
+  apiFetch<FirmwareManifest[]>('/firmware/templates', z.array(FirmwareManifestSchema), { signal })
+
+export const fetchFirmwareTemplate = (templateId: string, signal?: AbortSignal) =>
+  apiFetch<FirmwareManifest>(`/firmware/templates/${encodeURIComponent(templateId)}`, FirmwareManifestSchema, { signal })
+
+export const validateFirmwareConfig = (templateId: string, parameters: Record<string, unknown>) =>
+  apiFetch<{ valid: boolean; template_id: string; parameters: Record<string, unknown> }>(
+    `/firmware/templates/${encodeURIComponent(templateId)}/validate`,
+    undefined,
+    {
+      method: 'POST',
+      body: JSON.stringify({ parameters }),
+    }
+  )
+
+export const generateFirmware = (templateId: string, parameters: Record<string, unknown>) =>
+  apiFetch<BuildRecord>(
+    `/firmware/templates/${encodeURIComponent(templateId)}/generate`,
+    BuildRecordSchema,
+    {
+      method: 'POST',
+      body: JSON.stringify({ parameters }),
+    }
+  )
+
+export const compileFirmware = (buildId: string, forceMock: boolean = false) =>
+  apiFetch<BuildRecord>(
+    `/firmware/builds/${encodeURIComponent(buildId)}/compile`,
+    BuildRecordSchema,
+    {
+      method: 'POST',
+      body: JSON.stringify({ force_mock: forceMock }),
+    }
+  )
+
+export const fetchBuildStatus = (buildId: string, signal?: AbortSignal) =>
+  apiFetch<BuildRecord>(`/firmware/builds/${encodeURIComponent(buildId)}`, BuildRecordSchema, { signal })
+
+export const fetchFirmwareHistory = (limit = 50, offset = 0, signal?: AbortSignal) => {
+  const params = new URLSearchParams()
+  params.append('limit', String(limit))
+  params.append('offset', String(offset))
+  return apiFetch<PaginatedFirmwareHistory>(
+    `/firmware/history?${params.toString()}`,
+    PaginatedFirmwareHistorySchema,
+    { signal }
+  )
+}
+
+export const getFirmwareBinaryUrl = (buildId: string): string =>
+  `/api/terranode/firmware/builds/${encodeURIComponent(buildId)}/binary`
+
+export const getFirmwareSourceUrl = (buildId: string): string =>
+  `/api/terranode/firmware/builds/${encodeURIComponent(buildId)}/source`
+

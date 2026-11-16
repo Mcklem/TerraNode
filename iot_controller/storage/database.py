@@ -92,6 +92,30 @@ class ScheduleHistoryModel(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)       # SUCCESS, BLOCKED, FAILED
 
 
+class FirmwareBuildModel(Base):
+    """Historical and tracking record of firmware compilations and builds."""
+    __tablename__ = "firmware_builds"
+    __table_args__ = (
+        Index("idx_fw_tmpl_ts", "template_id", "timestamp"),
+        Index("idx_fw_status", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)  # UUID4
+    timestamp: Mapped[float] = mapped_column(Float, nullable=False, index=True)
+    template_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    template_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_fqbn: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(32), default="QUEUED", index=True)  # QUEUED, GENERATED, COMPILED, FAILED
+    status_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    compiler_output: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    binary_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    binary_size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    checksum_sha256: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    completed_at: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    public_params_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+
 class Database:
     """Thread-safe SQLAlchemy 2.0 ORM Database connection and schema manager."""
 

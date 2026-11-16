@@ -1,0 +1,88 @@
+{
+  "id": "secure_firmata_wifi",
+  "name": "Secure StandardFirmata WiFi",
+  "description": "Firmware oficial protegido de TerraNode para NodeMCU ESP8266 con autenticación Sysex por token único, watchdog fail-safe y comunicación TCP robusta.",
+  "version": "1.2.0",
+  "category": "firmata",
+  "author": "TerraNode Engineering",
+  "board": {
+    "fqbn": "esp8266:esp8266:nodemcuv2",
+    "name": "NodeMCU 1.0 (ESP-12E)",
+    "architecture": "esp8266",
+    "flash_size": "4M"
+  },
+  "upload_methods": ["web_serial", "binary_download", "source_download"],
+  "parameters": [
+    {
+      "id": "WIFI_SSID",
+      "label": "Red WiFi (SSID)",
+      "type": "string",
+      "required": true,
+      "default": "",
+      "description": "Nombre de la red WiFi 2.4 GHz a la que se conectará el nodo."
+    },
+    {
+      "id": "WIFI_PASS",
+      "label": "Contraseña WiFi",
+      "type": "password",
+      "required": true,
+      "sensitive": true,
+      "description": "Clave WPA/WPA2 de la red inalámbrica."
+    },
+    {
+      "id": "NODE_AUTH_KEY",
+      "label": "Clave Secreta de Autenticación (auth_key)",
+      "type": "secret",
+      "required": true,
+      "sensitive": true,
+      "min_length": 8,
+      "description": "Token secreto que debe coincidir con la clave 'auth_key' definida para este nodo en system.yaml."
+    },
+    {
+      "id": "NODE_HOSTNAME",
+      "label": "Nombre de Host de Red",
+      "type": "string",
+      "required": true,
+      "default": "terranode-node",
+      "description": "Identificador reportado por el microcontrolador al router/DHCP."
+    },
+    {
+      "id": "SERVER_PORT",
+      "label": "Puerto TCP de Firmata",
+      "type": "port",
+      "required": true,
+      "default": 3030,
+      "description": "Puerto en el que escuchará el socket de Firmata (por defecto 3030)."
+    },
+    {
+      "id": "WATCHDOG_TIMEOUT_MS",
+      "label": "Timeout de Watchdog (ms)",
+      "type": "number",
+      "required": true,
+      "default": 5000,
+      "min": 1000,
+      "max": 60000,
+      "description": "Tiempo límite de inactividad antes de revocar autenticación y poner pines en estado seguro."
+    },
+    {
+      "id": "USE_TLS_SECURITY",
+      "label": "Cifrado TLS (BearSSL)",
+      "type": "select",
+      "required": true,
+      "default": "0",
+      "options": [
+        {"value": "0", "label": "Desactivado (Recomendado para ESP8266)"},
+        {"value": "1", "label": "Activado (Requiere más RAM)"}
+      ],
+      "description": "Cifrado TLS de socket para microcontroladores con suficiente RAM."
+    }
+  ],
+  "dependencies": [
+    { "name": "Firmata", "version": "2.5.9" },
+    { "name": "Servo", "version": "1.2.1" }
+  ],
+  "build": {
+    "optimize": true,
+    "cpu_freq": 80
+  }
+}

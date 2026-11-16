@@ -1,6 +1,7 @@
 'use client'
 
-import { Radio, RefreshCw, Server, Settings2 } from 'lucide-react'
+import Link from 'next/link'
+import { Cpu, Radio, RefreshCw, Server, Settings2 } from 'lucide-react'
 import type { Health, TerraNode } from '@/lib/terranode-api'
 
 interface HeaderProps {
@@ -63,6 +64,15 @@ export function Header({
           <span>OVERRIDES</span>
           <b className="accent-amber">{overridesCount}</b>
         </div>
+
+        <Link
+          href="/firmware-studio"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-medium border border-border bg-surface-2 text-foreground hover:text-accent hover:border-accent transition-colors"
+          title="Abrir Firmware Studio para configurar y flashear nodos"
+        >
+          <Cpu size={14} className="text-accent" />
+          <span>FIRMWARE</span>
+        </Link>
 
         <button
           type="button"

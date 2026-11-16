@@ -19,6 +19,7 @@ class SystemContainer:
         self.time_scheduler: Optional[Any] = None
         self.rule_engine: Optional[Any] = None
         self.db: Optional[Database] = None
+        self.firmware_service: Optional[Any] = None
 
 
 system_container = SystemContainer()
@@ -73,3 +74,11 @@ def get_database() -> Database:
     if system_container.db is None:
         raise RuntimeError("Database is not initialized in API container")
     return system_container.db
+
+
+def get_firmware_service():
+    if system_container.firmware_service is None:
+        from firmware.service import FirmwareService
+        system_container.firmware_service = FirmwareService(database=system_container.db)
+    return system_container.firmware_service
+

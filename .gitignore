@@ -29,3 +29,8 @@ dist/
 # SQLite runtime files
 *.db-wal
 *.db-shm
+
+# Firmware Studio builds and workspaces
+iot_hardware/firmware/.workspaces/
+*.bin
+*.hex

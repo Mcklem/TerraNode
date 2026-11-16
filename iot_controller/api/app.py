@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from api.routes import devices, health, history, nodes, overrides, rules, schedules
+from api.routes import devices, firmware, health, history, nodes, overrides, rules, schedules
 
 
 @asynccontextmanager
@@ -66,6 +66,14 @@ tags_metadata = [
             "verificación de persistencia."
         ),
     },
+    {
+        "name": "Firmware Studio",
+        "description": (
+            "Gestión, generación, compilación y flasheo de **firmware para nodos IoT**. "
+            "Soporta plantillas declarativas (`manifest.json`), configuración dinámica de parámetros, "
+            "espacios de compilación aislados y flasheo directo por Web Serial."
+        ),
+    },
 ]
 
 DESCRIPTION_MARKDOWN = """
@@ -122,6 +130,7 @@ def create_app() -> FastAPI:
     app.include_router(history.router)
     app.include_router(rules.router)
     app.include_router(schedules.router)
+    app.include_router(firmware.router)
 
     # Mount MCP Server SSE router if enabled in settings
     from core.settings import settings

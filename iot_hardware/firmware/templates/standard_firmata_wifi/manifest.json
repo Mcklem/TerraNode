@@ -1,0 +1,49 @@
+{
+  "id": "standard_firmata_wifi",
+  "name": "StandardFirmata WiFi (Legacy)",
+  "description": "Firmware estándar de Firmata sobre red WiFi TCP para NodeMCU ESP8266 (sin autenticación Sysex adicional).",
+  "version": "1.0.0",
+  "category": "firmata",
+  "author": "Firmata / TerraNode",
+  "board": {
+    "fqbn": "esp8266:esp8266:nodemcuv2",
+    "name": "NodeMCU 1.0 (ESP-12E)",
+    "architecture": "esp8266",
+    "flash_size": "4M"
+  },
+  "upload_methods": ["web_serial", "binary_download", "source_download"],
+  "parameters": [
+    {
+      "id": "WIFI_SSID",
+      "label": "Red WiFi (SSID)",
+      "type": "string",
+      "required": true,
+      "default": "",
+      "description": "Nombre de la red WiFi 2.4 GHz."
+    },
+    {
+      "id": "WIFI_PASS",
+      "label": "Contraseña WiFi",
+      "type": "password",
+      "required": true,
+      "sensitive": true,
+      "description": "Clave WPA/WPA2 de la red inalámbrica."
+    },
+    {
+      "id": "SERVER_PORT",
+      "label": "Puerto TCP de Firmata",
+      "type": "port",
+      "required": true,
+      "default": 3030,
+      "description": "Puerto en el que escuchará el socket de Firmata."
+    }
+  ],
+  "dependencies": [
+    { "name": "Firmata", "version": "2.5.9" },
+    { "name": "Servo", "version": "1.2.1" }
+  ],
+  "build": {
+    "optimize": true,
+    "cpu_freq": 80
+  }
+}
