@@ -47,6 +47,7 @@ class SaveConfigResponse(BaseModel):
     checksum: str
     backup_id: str
     diff: Dict[str, Any]
+    env_changes: List[Dict[str, Any]] = Field(default_factory=list)
     message: str
 
 
@@ -192,12 +193,18 @@ async def save_config(
                 detail="Debe proporcionar 'raw_yaml' o 'visual_model' para guardar la configuración.",
             )
 
+        env_changes = getattr(diff_res, "env_changes", [])
+        msg = "Configuración guardada exitosamente y respaldo creado."
+        if env_changes:
+            msg += f" ({len(env_changes)} secretos externalizados de forma segura a .env)"
+
         return {
             "success": success,
             "checksum": checksum,
             "backup_id": backup_meta.id,
             "diff": diff_res.to_dict(),
-            "message": "Configuración guardada exitosamente y respaldo creado.",
+            "env_changes": env_changes,
+            "message": msg,
         }
     except ConfigurationConflictError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))

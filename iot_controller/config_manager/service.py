@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple, Union
 from config_manager.backup_manager import BackupManager
 from config_manager.diff_engine import DiffEngine
+from config_manager.env_manager import EnvSecretManager, EnvSecurityError
 from config_manager.models import (
     BackupMetadata,
     ConfigStatus,
@@ -53,7 +54,12 @@ class ConfigManagerService:
     conflict detection, atomic transactional saving, backups, and rollback.
     """
 
-    def __init__(self, config_path: str, backups_dir: Optional[str] = None):
+    def __init__(
+        self,
+        config_path: str,
+        backups_dir: Optional[str] = None,
+        dotenv_path: Optional[str] = None,
+    ):
         self.config_path = os.path.abspath(config_path)
         if backups_dir:
             self.backups_dir = os.path.abspath(backups_dir)
@@ -62,6 +68,7 @@ class ConfigManagerService:
             self.backups_dir = os.path.join(config_dir, "backups")
 
         self.backup_mgr = BackupManager(self.backups_dir)
+        self.env_mgr = EnvSecretManager(dotenv_path=dotenv_path, config_path=self.config_path)
         self.logger = get_logger("ConfigManager")
         self.last_saved_at: Optional[str] = None
         self.last_applied_at: Optional[str] = None
@@ -153,6 +160,7 @@ class ConfigManagerService:
     def generate_diff_for_visual_model(self, visual_model: Dict[str, Any]) -> Tuple[str, DiffResult]:
         """
         Merge visual model with current CommentedMap to generate proposed YAML string and diff.
+        Sensitive secrets are planned for externalization into .env (never shown plaintext in YAML diff).
         Returns: (proposed_yaml_str, DiffResult)
         """
         current_raw = self.read_raw_yaml() if os.path.exists(self.config_path) else ""
@@ -160,25 +168,41 @@ class ConfigManagerService:
         if err or parsed_orig is None:
             parsed_orig = CommentedMap()
 
+        # Sanitize secrets to ${VAR_NAME} placeholders without writing to .env yet
+        clean_model, env_changes = self.env_mgr.extract_and_sync_secrets(
+            visual_model=visual_model,
+            current_raw_yaml=current_raw,
+            commit=False,
+        )
+
         updated_map = apply_visual_model_to_commented_map(
             target_map=parsed_orig,
-            visual_model=visual_model,
+            visual_model=clean_model,
             original_reference=to_plain_dict(parsed_orig),
         )
         proposed_yaml = serialize_yaml(updated_map)
         diff = DiffEngine.generate_diff(current_raw, proposed_yaml)
+        diff.env_changes = env_changes
+        if env_changes:
+            diff.has_changes = True
         return proposed_yaml, diff
 
     def visual_model_to_yaml(self, visual_model: Dict[str, Any]) -> str:
-        """Convert visual model to comment-preserving YAML string."""
+        """Convert visual model to comment-preserving YAML string with sanitized env references."""
         current_raw = self.read_raw_yaml() if os.path.exists(self.config_path) else ""
         parsed_orig, err, _ = parse_yaml(current_raw)
         if err or parsed_orig is None:
             parsed_orig = CommentedMap()
 
+        clean_model, _ = self.env_mgr.extract_and_sync_secrets(
+            visual_model=visual_model,
+            current_raw_yaml=current_raw,
+            commit=False,
+        )
+
         updated_map = apply_visual_model_to_commented_map(
             target_map=parsed_orig,
-            visual_model=visual_model,
+            visual_model=clean_model,
             original_reference=to_plain_dict(parsed_orig),
         )
         return serialize_yaml(updated_map)
@@ -283,7 +307,8 @@ class ConfigManagerService:
     ) -> Tuple[bool, str, BackupMetadata, DiffResult]:
         """
         Save configuration modified through the visual editor.
-        Merges visual model into the current CommentedMap to preserve comments and structure.
+        Automatically externalizes sensitive secrets into .env, updates os.environ,
+        and saves clean ${VAR_NAME} placeholders into system.yaml while preserving comments.
         """
         current_raw = self.read_raw_yaml() if os.path.exists(self.config_path) else ""
         current_checksum = self.get_content_checksum(current_raw) if current_raw else ""
@@ -298,20 +323,35 @@ class ConfigManagerService:
         if err or parsed_orig is None:
             raise ConfigurationSaveError(f"Error reading existing configuration for visual merge: {err}")
 
+        # Extract sensitive secrets, write to .env, and update os.environ
+        try:
+            clean_model, env_changes = self.env_mgr.extract_and_sync_secrets(
+                visual_model=visual_model,
+                current_raw_yaml=current_raw,
+                commit=True,
+            )
+        except EnvSecurityError as e:
+            raise ConfigurationSaveError(str(e))
+
         # Update CommentedMap in-place preserving comments
         updated_map = apply_visual_model_to_commented_map(
             target_map=parsed_orig,
-            visual_model=visual_model,
+            visual_model=clean_model,
             original_reference=to_plain_dict(parsed_orig),
         )
         new_yaml_str = serialize_yaml(updated_map)
 
-        return self.save_raw_yaml(
+        success, new_checksum, backup_meta, diff_res = self.save_raw_yaml(
             new_yaml_content=new_yaml_str,
             base_checksum=base_checksum,
             author=author,
             description=description,
         )
+        diff_res.env_changes = env_changes
+        if env_changes:
+            diff_res.has_changes = True
+
+        return success, new_checksum, backup_meta, diff_res
 
     def restore_backup(
         self,

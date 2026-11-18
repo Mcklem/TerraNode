@@ -187,6 +187,43 @@ schedules:
             content = f.read()
         self.assertIn("name: visual_api_parcela", content)
 
+    def test_save_visual_model_externalizes_secrets_via_api(self):
+        """POST /api/v1/config/save with secrets extracts them to .env and returns env_changes."""
+        current_config = self.config_mgr.load_active_config(mask=True)
+        if "notifications" not in current_config:
+            current_config["notifications"] = {}
+        if "telegram" not in current_config["notifications"]:
+            current_config["notifications"]["telegram"] = {}
+        current_config["notifications"]["telegram"]["bot_token"] = "API_SECRET_TOKEN_999"
+
+        # Check diff endpoint returns env_changes
+        diff_res = self.client.post(
+            "/api/v1/config/diff",
+            json={"visual_model": current_config},
+        )
+        self.assertEqual(diff_res.status_code, 200)
+        diff_data = diff_res.json()
+        self.assertTrue(diff_data["has_changes"])
+        self.assertIn("env_changes", diff_data)
+        self.assertTrue(any(e["variable"] == "TELEGRAM_BOT_TOKEN" for e in diff_data["env_changes"]))
+
+        # Save via API
+        save_res = self.client.post(
+            "/api/v1/config/save",
+            json={"visual_model": current_config},
+        )
+        self.assertEqual(save_res.status_code, 200)
+        save_data = save_res.json()
+        self.assertTrue(save_data["success"])
+        self.assertIn("env_changes", save_data)
+        self.assertTrue(any(e["variable"] == "TELEGRAM_BOT_TOKEN" for e in save_data["env_changes"]))
+
+        # system.yaml on disk should NOT have raw token
+        with open(self.config_path, "r", encoding="utf-8") as f:
+            saved_yaml = f.read()
+        self.assertNotIn("API_SECRET_TOKEN_999", saved_yaml)
+        self.assertIn("${TELEGRAM_BOT_TOKEN}", saved_yaml)
+
     def test_apply_config_endpoint(self):
         """POST /api/v1/config/apply triggers reload."""
         res = self.client.post("/api/v1/config/apply", json={})

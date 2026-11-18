@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, FileText, X } from 'lucide-react'
+import { AlertTriangle, Check, CheckCircle2, ChevronRight, Copy, FileText, Lock, ShieldCheck, X } from 'lucide-react'
 import type { DiffResult } from '@/lib/config-api'
 
 interface DiffModalProps {
@@ -81,6 +81,12 @@ export function DiffModal({
                 -{diff.removed_keys.length} eliminados
               </span>
             )}
+            {diff.env_changes && diff.env_changes.length > 0 && (
+              <span className="px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-400 font-mono flex items-center gap-1">
+                <Lock size={11} />
+                {diff.env_changes.length} en .env
+              </span>
+            )}
             {!diff.has_changes && (
               <span className="px-2 py-0.5 rounded bg-surface-3 border border-border text-muted-foreground font-mono">
                 Sin cambios respecto a la versión guardada
@@ -95,6 +101,40 @@ export function DiffModal({
                 {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
                 <span>{copied ? 'Copiado' : 'Copiar Diff'}</span>
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Environment Secrets Isolation Banner */}
+        {diff?.env_changes && diff.env_changes.length > 0 && (
+          <div className="mx-6 my-2.5 p-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 flex items-start gap-3 text-xs shrink-0">
+            <div className="p-1.5 rounded-md bg-emerald-500/20 text-emerald-400 shrink-0 mt-0.5">
+              <ShieldCheck size={16} />
+            </div>
+            <div className="space-y-1">
+              <p className="font-semibold text-emerald-300">
+                Aislamiento Seguro de Credenciales (.env)
+              </p>
+              <p className="text-emerald-200/80 text-[11px] leading-relaxed">
+                Los siguientes datos sensibles han sido detectados en el editor y se aislarán automáticamente en el archivo{' '}
+                <code className="font-mono bg-black/40 px-1 py-0.5 rounded text-emerald-300">.env</code>.
+                En <code className="font-mono bg-black/40 px-1 py-0.5 rounded text-emerald-300">system.yaml</code> solo se guardará la referencia{' '}
+                <code className="font-mono bg-black/40 px-1 py-0.5 rounded text-emerald-300">{'${VAR}'}</code>, garantizando que ninguna clave secreta se exponga en texto plano:
+              </p>
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {diff.env_changes.map((ec) => (
+                  <span
+                    key={ec.variable}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 font-mono text-[11px] rounded bg-emerald-950/60 border border-emerald-500/40 text-emerald-200"
+                  >
+                    <Lock size={10} className="text-emerald-400" />
+                    {ec.variable}
+                    <span className="text-[10px] text-emerald-400/70">
+                      ({ec.action === 'created' ? 'nueva' : 'actualizada'})
+                    </span>
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         )}

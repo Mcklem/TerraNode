@@ -14,12 +14,20 @@ export interface ValidationResult {
   infos: ValidationIssue[]
 }
 
+export interface EnvChange {
+  variable: string
+  path: string
+  masked_value: string
+  action: 'created' | 'updated'
+}
+
 export interface DiffResult {
   unified_diff: string
   has_changes: boolean
   added_keys: string[]
   removed_keys: string[]
   modified_keys: string[]
+  env_changes?: EnvChange[]
   proposed_yaml?: string
 }
 
@@ -225,6 +233,7 @@ export interface SaveConfigResponse {
   checksum: string
   backup_id: string
   diff: DiffResult
+  env_changes?: EnvChange[]
   message: string
 }
 

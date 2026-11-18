@@ -59,6 +59,7 @@ class DiffResult:
     added_keys: List[str] = field(default_factory=list)
     removed_keys: List[str] = field(default_factory=list)
     modified_keys: List[str] = field(default_factory=list)
+    env_changes: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

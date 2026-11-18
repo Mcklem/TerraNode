@@ -9,10 +9,12 @@ import {
   EyeOff,
   Globe,
   HelpCircle,
+  Lock,
   Mail,
   Plus,
   RefreshCw,
   Send,
+  ShieldCheck,
   Trash2,
   X,
   AlertTriangle,
@@ -431,17 +433,30 @@ export function NotificationsTab({ notifications, onChange }: NotificationsTabPr
             </label>
           </div>
 
+          <div className="p-3 rounded-lg border border-blue-500/20 bg-blue-500/5 flex items-start gap-2.5 text-xs">
+            <ShieldCheck size={16} className="text-blue-400 shrink-0 mt-0.5" />
+            <p className="text-muted-foreground text-[11px] leading-relaxed">
+              <strong className="text-foreground">Aislamiento de credenciales:</strong> Los valores de Bot Token y Chat ID se sincronizan automáticamente en tu archivo <code className="font-mono text-blue-300">.env</code> para evitar exponer claves en el archivo <code className="font-mono text-foreground">system.yaml</code>.
+            </p>
+          </div>
+
           <div className="space-y-4">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-mono font-medium text-foreground">
                   Bot Token (`telegram.bot_token`)
                 </label>
-                {(telegramCfg.bot_token?.includes('•') || telegramCfg.bot_token?.includes('*')) && (
-                  <span className="px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    🔒 Protegido / Configurado
+                <div className="flex items-center gap-1.5">
+                  <span className="px-2 py-0.5 text-[10px] font-mono rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center gap-1">
+                    <Lock size={10} />
+                    .env: TELEGRAM_BOT_TOKEN
                   </span>
-                )}
+                  {(telegramCfg.bot_token?.includes('•') || telegramCfg.bot_token?.includes('*')) && (
+                    <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      Protegido
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="relative">
                 <input
@@ -460,14 +475,20 @@ export function NotificationsTab({ notifications, onChange }: NotificationsTabPr
                 </button>
               </div>
               <p className="text-[11px] text-muted-foreground">
-                Token obtenido de @BotFather al crear el bot de Telegram. Déjalo enmascarado para mantener el valor de .env o escribe uno nuevo.
+                Token obtenido de @BotFather al crear el bot de Telegram. Al escribir un nuevo token, se externalizará automáticamente a .env.
               </p>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-mono font-medium text-foreground">
-                Chat ID (`telegram.chat_id`)
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-mono font-medium text-foreground">
+                  Chat ID (`telegram.chat_id`)
+                </label>
+                <span className="px-2 py-0.5 text-[10px] font-mono rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center gap-1">
+                  <Lock size={10} />
+                  .env: TELEGRAM_CHAT_ID
+                </span>
+              </div>
               <input
                 type="text"
                 value={telegramCfg.chat_id || ''}
@@ -476,7 +497,7 @@ export function NotificationsTab({ notifications, onChange }: NotificationsTabPr
                 className="w-full px-3 py-2 text-xs font-mono rounded-lg border border-border bg-surface-2 text-foreground focus:outline-none focus:border-accent"
               />
               <p className="text-[11px] text-muted-foreground">
-                Identificador de usuario, grupo o canal donde enviar los avisos (número directo o variable).
+                Identificador de usuario, grupo o canal donde enviar los avisos (se sincroniza con TELEGRAM_CHAT_ID en .env).
               </p>
             </div>
           </div>
@@ -526,12 +547,25 @@ export function NotificationsTab({ notifications, onChange }: NotificationsTabPr
             </label>
           </div>
 
+          <div className="p-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 flex items-start gap-2.5 text-xs">
+            <ShieldCheck size={16} className="text-emerald-400 shrink-0 mt-0.5" />
+            <p className="text-muted-foreground text-[11px] leading-relaxed">
+              <strong className="text-foreground">Aislamiento de credenciales SMTP:</strong> El servidor, puerto, usuario, contraseña y remitente se sincronizan automáticamente en el archivo <code className="font-mono text-emerald-300">.env</code> de TerraNode sin quedar expuestos en texto plano dentro de <code className="font-mono text-foreground">system.yaml</code>.
+            </p>
+          </div>
+
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="sm:col-span-2 space-y-1.5">
-                <label className="text-xs font-mono font-medium text-foreground">
-                  Servidor SMTP (`smtp_host`)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-mono font-medium text-foreground">
+                    Servidor SMTP (`smtp_host`)
+                  </label>
+                  <span className="px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                    <Lock size={10} />
+                    .env: EMAIL_SMTP_HOST
+                  </span>
+                </div>
                 <input
                   type="text"
                   value={emailCfg.smtp_host || ''}
@@ -542,9 +576,14 @@ export function NotificationsTab({ notifications, onChange }: NotificationsTabPr
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-mono font-medium text-foreground">
-                  Puerto (`smtp_port`)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-mono font-medium text-foreground">
+                    Puerto (`smtp_port`)
+                  </label>
+                  <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    .env: PORT
+                  </span>
+                </div>
                 <input
                   type="number"
                   value={emailCfg.smtp_port || 587}
@@ -569,9 +608,15 @@ export function NotificationsTab({ notifications, onChange }: NotificationsTabPr
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <label className="text-xs font-mono font-medium text-foreground">
-                  Usuario SMTP (`username`)
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-mono font-medium text-foreground">
+                    Usuario SMTP (`username`)
+                  </label>
+                  <span className="px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                    <Lock size={10} />
+                    .env: EMAIL_USERNAME
+                  </span>
+                </div>
                 <input
                   type="text"
                   value={emailCfg.username || ''}
@@ -586,11 +631,17 @@ export function NotificationsTab({ notifications, onChange }: NotificationsTabPr
                   <label className="text-xs font-mono font-medium text-foreground">
                     Contraseña (`password`)
                   </label>
-                  {(emailCfg.password?.includes('•') || emailCfg.password?.includes('*')) && (
-                    <span className="px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                      🔒 Protegida
+                  <div className="flex items-center gap-1.5">
+                    <span className="px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                      <Lock size={10} />
+                      .env: EMAIL_PASSWORD
                     </span>
-                  )}
+                    {(emailCfg.password?.includes('•') || emailCfg.password?.includes('*')) && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-mono rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        Protegida
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="relative">
                   <input
@@ -612,9 +663,15 @@ export function NotificationsTab({ notifications, onChange }: NotificationsTabPr
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-mono font-medium text-foreground">
-                Remitente (`from_address`)
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-mono font-medium text-foreground">
+                  Remitente (`from_address`)
+                </label>
+                <span className="px-2 py-0.5 text-[10px] font-mono rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                  <Lock size={10} />
+                  .env: EMAIL_FROM_ADDRESS
+                </span>
+              </div>
               <input
                 type="text"
                 value={emailCfg.from_address || ''}
@@ -938,6 +995,10 @@ export function NotificationsTab({ notifications, onChange }: NotificationsTabPr
                     </button>
                   </div>
                 ))}
+
+                <p className="text-[10px] text-muted-foreground">
+                  Las cabeceras con tokens sensibles (Authorization, Token, Secret, Key) se aíslan automáticamente en el archivo <code className="font-mono text-purple-300">.env</code> al guardar la configuración.
+                </p>
               </div>
 
               {/* Payload Template */}
