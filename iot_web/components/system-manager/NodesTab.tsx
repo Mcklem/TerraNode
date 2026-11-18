@@ -10,13 +10,14 @@ import {
   Lock,
   Plus,
   Radio,
+  RefreshCw,
   Settings,
   Shield,
   Trash2,
   Wifi,
   X,
 } from 'lucide-react'
-import type { NodeConfig, SchemaMetadata } from '@/lib/config-api'
+import { fetchConfig, type NodeConfig, type SchemaMetadata } from '@/lib/config-api'
 
 interface NodesTabProps {
   nodes: Record<string, NodeConfig>
@@ -34,6 +35,8 @@ export function NodesTab({
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [revealedSecrets, setRevealedSecrets] = useState<Record<string, boolean>>({})
+  const [unmaskedKeys, setUnmaskedKeys] = useState<Record<string, string>>({})
+  const [loadingKey, setLoadingKey] = useState<Record<string, boolean>>({})
 
   // Form State
   const [formId, setFormId] = useState('')
@@ -160,11 +163,38 @@ export function NodesTab({
     onChange(updated)
   }
 
-  const toggleSecretReveal = (nodeId: string) => {
-    setRevealedSecrets((prev) => ({
-      ...prev,
-      [nodeId]: !prev[nodeId],
-    }))
+  const toggleSecretReveal = async (nodeId: string) => {
+    if (revealedSecrets[nodeId]) {
+      setRevealedSecrets((prev) => ({ ...prev, [nodeId]: false }))
+      return
+    }
+
+    const node = nodes[nodeId]
+    const isMasked = !node?.auth_key || node.auth_key.includes('•') || node.auth_key.includes('*')
+
+    if (!isMasked && node?.auth_key) {
+      setUnmaskedKeys((prev) => ({ ...prev, [nodeId]: node.auth_key || '' }))
+      setRevealedSecrets((prev) => ({ ...prev, [nodeId]: true }))
+      return
+    }
+
+    if (unmaskedKeys[nodeId] !== undefined) {
+      setRevealedSecrets((prev) => ({ ...prev, [nodeId]: true }))
+      return
+    }
+
+    try {
+      setLoadingKey((prev) => ({ ...prev, [nodeId]: true }))
+      const res = await fetchConfig(false)
+      const secret = res.config.nodes?.[nodeId]?.auth_key || ''
+      setUnmaskedKeys((prev) => ({ ...prev, [nodeId]: secret }))
+      setRevealedSecrets((prev) => ({ ...prev, [nodeId]: true }))
+    } catch (e) {
+      console.error('Error fetching unmasked auth_key:', e)
+      setRevealedSecrets((prev) => ({ ...prev, [nodeId]: true }))
+    } finally {
+      setLoadingKey((prev) => ({ ...prev, [nodeId]: false }))
+    }
   }
 
   const availableDrivers = schema?.supported_drivers || [
@@ -290,15 +320,23 @@ export function NodesTab({
                       <Lock size={12} className="text-accent" /> Clave de Autenticación:
                     </span>
                     <div className="flex items-center gap-1.5">
-                      <code className="text-foreground text-[11px] bg-surface-2 px-1.5 py-0.5 rounded">
-                        {isSecretRevealed ? node.auth_key || '••••••••' : '••••••••'}
+                      <code className="text-foreground text-[11px] bg-surface-2 px-1.5 py-0.5 rounded font-mono">
+                        {isSecretRevealed ? (unmaskedKeys[nodeId] !== undefined ? unmaskedKeys[nodeId] : (node.auth_key || '••••••••')) : '••••••••'}
                       </code>
                       <button
                         type="button"
                         onClick={() => toggleSecretReveal(nodeId)}
-                        className="text-muted-foreground hover:text-foreground"
+                        disabled={loadingKey[nodeId]}
+                        title={isSecretRevealed ? 'Ocultar clave' : 'Mostrar clave'}
+                        className="text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
                       >
-                        {isSecretRevealed ? <EyeOff size={12} /> : <Eye size={12} />}
+                        {loadingKey[nodeId] ? (
+                          <RefreshCw size={12} className="animate-spin text-accent" />
+                        ) : isSecretRevealed ? (
+                          <EyeOff size={12} />
+                        ) : (
+                          <Eye size={12} />
+                        )}
                       </button>
                     </div>
                   </div>

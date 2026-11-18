@@ -12,6 +12,7 @@ from config_manager.yaml_parser import MASKED_SECRET_SENTINEL
 class TestApiConfigRoutes(unittest.TestCase):
 
     def setUp(self):
+        self._orig_env = os.environ.copy()
         self.test_dir = tempfile.mkdtemp()
         self.config_path = os.path.join(self.test_dir, "system.yaml")
         self.backups_dir = os.path.join(self.test_dir, "backups")
@@ -73,6 +74,8 @@ schedules:
 
     def tearDown(self):
         shutil.rmtree(self.test_dir)
+        os.environ.clear()
+        os.environ.update(self._orig_env)
 
     def test_get_config_masked(self):
         """GET /api/v1/config with masked=true masks auth_key."""

@@ -4,7 +4,13 @@ from dataclasses import dataclass
 from typing import Optional
 from dotenv import load_dotenv
 
-load_dotenv()
+# Search for .env in iot_controller directory first, then fallback to current directory
+_controller_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_env_path = os.path.join(_controller_dir, ".env")
+if os.path.exists(_env_path):
+    load_dotenv(_env_path)
+else:
+    load_dotenv()
 
 
 @dataclass

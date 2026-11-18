@@ -104,6 +104,8 @@ class EnvSecretManager:
                 self.dotenv_path = os.path.abspath(".env")
 
         self.logger = get_logger("EnvSecretManager")
+        if os.path.exists(self.dotenv_path):
+            dotenv.load_dotenv(self.dotenv_path, override=True)
 
     def _discover_secret_targets(self, model: Dict[str, Any]) -> List[Tuple[Tuple[str, ...], str]]:
         """
@@ -202,15 +204,20 @@ class EnvSecretManager:
             str_val = str(val).strip()
             current_env_val = os.environ.get(var_name)
 
-            if current_env_val != str_val:
-                action = "updated" if current_env_val is not None else "created"
+            needs_env_write = (current_env_val != str_val)
+            needs_externalization = not is_env_template(existing_val)
+
+            if needs_env_write:
+                secrets_to_commit[var_name] = str_val
+
+            if needs_env_write or needs_externalization:
+                action = "created" if current_env_val is None else "updated"
                 env_changes.append({
                     "variable": var_name,
                     "path": ".".join(str(p) for p in path_tuple),
                     "masked_value": "••••••••",
                     "action": action,
                 })
-                secrets_to_commit[var_name] = str_val
 
             # Replace plaintext in model with ${VAR_NAME}
             set_val_at_path(model_copy, path_tuple, f"${{{var_name}}}")

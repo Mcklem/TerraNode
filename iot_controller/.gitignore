@@ -12,6 +12,8 @@ __pycache__/
 # Environment & credentials
 .env
 .env.local
+.env.bak
+.env.*.bak
 
 # Logs
 *.log

@@ -24,6 +24,7 @@ import {
   NotificationsConfig,
   TelegramNotificationConfig,
   WebhookConfig,
+  fetchConfig,
   testNotificationChannel,
 } from '@/lib/config-api'
 
@@ -37,6 +38,8 @@ type NotificationSubTab = 'telegram' | 'email' | 'webhooks'
 export function NotificationsTab({ notifications, onChange }: NotificationsTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<NotificationSubTab>('telegram')
   const [showTokens, setShowTokens] = useState<Record<string, boolean>>({})
+  const [revealedSecrets, setRevealedSecrets] = useState<Record<string, string>>({})
+  const [loadingSecret, setLoadingSecret] = useState<Record<string, boolean>>({})
 
   // Testing feedback states
   const [testingChannel, setTestingChannel] = useState<string | null>(null)
@@ -134,8 +137,47 @@ export function NotificationsTab({ notifications, onChange }: NotificationsTabPr
     })
   }
 
-  const toggleShowSecret = (field: string) => {
-    setShowTokens((prev) => ({ ...prev, [field]: !prev[field] }))
+  const toggleShowSecret = async (field: 'telegram_bot' | 'email_pass') => {
+    // If currently visible, hide it
+    if (showTokens[field]) {
+      setShowTokens((prev) => ({ ...prev, [field]: false }))
+      return
+    }
+
+    // Check if we already have the unmasked value cached in state
+    if (revealedSecrets[field] !== undefined) {
+      setShowTokens((prev) => ({ ...prev, [field]: true }))
+      return
+    }
+
+    const currentVal = field === 'telegram_bot' ? telegramCfg.bot_token : emailCfg.password
+    const isMasked = !currentVal || currentVal.includes('•') || currentVal.includes('*')
+
+    // If the user already typed a plaintext value that is not masked, use it directly
+    if (!isMasked && currentVal) {
+      setRevealedSecrets((prev) => ({ ...prev, [field]: currentVal }))
+      setShowTokens((prev) => ({ ...prev, [field]: true }))
+      return
+    }
+
+    // Otherwise, fetch the unmasked secret from the server
+    try {
+      setLoadingSecret((prev) => ({ ...prev, [field]: true }))
+      const res = await fetchConfig(false)
+      let secret = ''
+      if (field === 'telegram_bot') {
+        secret = res.config.notifications?.telegram?.bot_token || ''
+      } else if (field === 'email_pass') {
+        secret = res.config.notifications?.email?.password || ''
+      }
+      setRevealedSecrets((prev) => ({ ...prev, [field]: secret }))
+      setShowTokens((prev) => ({ ...prev, [field]: true }))
+    } catch (err) {
+      console.error('Error fetching unmasked secret:', err)
+      setShowTokens((prev) => ({ ...prev, [field]: true }))
+    } finally {
+      setLoadingSecret((prev) => ({ ...prev, [field]: false }))
+    }
   }
 
   // Live test dispatcher
@@ -461,17 +503,37 @@ export function NotificationsTab({ notifications, onChange }: NotificationsTabPr
               <div className="relative">
                 <input
                   type={showTokens['telegram_bot'] ? 'text' : 'password'}
-                  value={telegramCfg.bot_token || ''}
-                  onChange={(e) => updateTelegram({ bot_token: e.target.value })}
+                  value={
+                    showTokens['telegram_bot']
+                      ? revealedSecrets['telegram_bot'] !== undefined
+                        ? revealedSecrets['telegram_bot']
+                        : telegramCfg.bot_token?.includes('•')
+                        ? ''
+                        : telegramCfg.bot_token || ''
+                      : telegramCfg.bot_token || ''
+                  }
+                  onChange={(e) => {
+                    const newVal = e.target.value
+                    updateTelegram({ bot_token: newVal })
+                    setRevealedSecrets((prev) => ({ ...prev, telegram_bot: newVal }))
+                  }}
                   placeholder="123456789:ABCDEF... o variable ${TELEGRAM_BOT_TOKEN}"
                   className="w-full px-3 py-2 pr-10 text-xs font-mono rounded-lg border border-border bg-surface-2 text-foreground focus:outline-none focus:border-accent"
                 />
                 <button
                   type="button"
                   onClick={() => toggleShowSecret('telegram_bot')}
-                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                  disabled={loadingSecret['telegram_bot']}
+                  title={showTokens['telegram_bot'] ? 'Ocultar token' : 'Mostrar token'}
+                  className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
                 >
-                  {showTokens['telegram_bot'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {loadingSecret['telegram_bot'] ? (
+                    <RefreshCw size={14} className="animate-spin text-accent" />
+                  ) : showTokens['telegram_bot'] ? (
+                    <EyeOff size={14} />
+                  ) : (
+                    <Eye size={14} />
+                  )}
                 </button>
               </div>
               <p className="text-[11px] text-muted-foreground">
@@ -646,17 +708,37 @@ export function NotificationsTab({ notifications, onChange }: NotificationsTabPr
                 <div className="relative">
                   <input
                     type={showTokens['email_pass'] ? 'text' : 'password'}
-                    value={emailCfg.password || ''}
-                    onChange={(e) => updateEmail({ password: e.target.value })}
+                    value={
+                      showTokens['email_pass']
+                        ? revealedSecrets['email_pass'] !== undefined
+                          ? revealedSecrets['email_pass']
+                          : emailCfg.password?.includes('•')
+                          ? ''
+                          : emailCfg.password || ''
+                        : emailCfg.password || ''
+                    }
+                    onChange={(e) => {
+                      const newVal = e.target.value
+                      updateEmail({ password: newVal })
+                      setRevealedSecrets((prev) => ({ ...prev, email_pass: newVal }))
+                    }}
                     placeholder="Contraseña de aplicación o variable ${EMAIL_PASSWORD}"
                     className="w-full px-3 py-2 pr-10 text-xs font-mono rounded-lg border border-border bg-surface-2 text-foreground focus:outline-none focus:border-accent"
                   />
                   <button
                     type="button"
                     onClick={() => toggleShowSecret('email_pass')}
-                    className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground"
+                    disabled={loadingSecret['email_pass']}
+                    title={showTokens['email_pass'] ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    className="absolute right-3 top-2.5 text-muted-foreground hover:text-foreground disabled:opacity-50 transition-colors"
                   >
-                    {showTokens['email_pass'] ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {loadingSecret['email_pass'] ? (
+                      <RefreshCw size={14} className="animate-spin text-accent" />
+                    ) : showTokens['email_pass'] ? (
+                      <EyeOff size={14} />
+                    ) : (
+                      <Eye size={14} />
+                    )}
                   </button>
                 </div>
               </div>

@@ -5,6 +5,8 @@ secrets.h
 !secrets.example.h
 .env
 .env.local
+.env.bak
+.env.*.bak
 *.pem
 *.key
 
