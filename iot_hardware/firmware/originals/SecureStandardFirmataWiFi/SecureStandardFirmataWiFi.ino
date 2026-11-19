@@ -79,6 +79,19 @@ void reportAnalogCallback(byte analogPin, int value);
 void sysexCallback(byte, byte, byte*);
 
 /* utility functions */
+bool constantTimeEquals(const char* a, const char* b, size_t maxLen) {
+  unsigned char result = 0;
+  for (size_t i = 0; i < maxLen; i++) {
+    result |= (a[i] ^ b[i]);
+    if (a[i] == '\0' || b[i] == '\0') {
+      if (a[i] != b[i]) result |= 0xFF;
+      break;
+    }
+  }
+  return result == 0;
+}
+byte failedAuthAttempts = 0;
+
 void wireWrite(byte data) {
   Wire.write((byte)data);
 }
@@ -179,7 +192,7 @@ void checkDigitalInputs(void) {
 
 void setPinModeCallback(byte pin, int mode) {
   if (Firmata.getPinMode(pin) == PIN_MODE_IGNORE) return;
-  if (!isNodeAuthenticated && mode != OUTPUT && mode != PIN_MODE_ANALOG) return;
+  if (!isNodeAuthenticated && !isResetting) return;
 
   if (Firmata.getPinMode(pin) == PIN_MODE_I2C && isI2CEnabled && mode != PIN_MODE_I2C) {
     disableI2CPins();
@@ -326,13 +339,18 @@ void sysexCallback(byte command, byte argc, byte *argv) {
     keyBuffer[keyLen] = '\0';
 
     byte authStatus = 0;
-    if (strcmp(keyBuffer, node_auth_key) == 0) {
+    if (constantTimeEquals(keyBuffer, node_auth_key, 64)) {
       isNodeAuthenticated = true;
       lastTrafficMillis = millis();
       previousMillis = lastTrafficMillis;
+      failedAuthAttempts = 0;
       authStatus = 1;
     } else {
       isNodeAuthenticated = false;
+      failedAuthAttempts++;
+      if (failedAuthAttempts >= 3) {
+        delay(1000); // Throttling brute-force attempts
+      }
       authStatus = 0;
     }
 
@@ -607,7 +625,7 @@ void loop() {
     Firmata.processInput();
   }
 
-  if (hadTraffic) {
+  if (hadTraffic && isNodeAuthenticated) {
     lastTrafficMillis = millis();
   }
 

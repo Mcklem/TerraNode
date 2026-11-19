@@ -166,6 +166,22 @@ class TestNotificationChannels(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sent_json.get("value"), 24.5)
         self.assertEqual(sent_json.get("rule"), "temp_rule")
 
+    async def test_webhook_ssrf_protection(self):
+        """Verify that webhooks targeting loopback or private ranges are blocked."""
+        malicious_urls = [
+            "http://127.0.0.1:8000/api/v1/devices",
+            "http://localhost/admin",
+            "http://192.168.1.1/router",
+            "http://169.254.169.254/latest/meta-data",
+            "ftp://example.com/test",
+        ]
+        payload = NotificationPayload(message="SSRF Test", channel=NotificationChannel.WEBHOOK)
+        for url in malicious_urls:
+            cfg = {"url": url, "method": "POST"}
+            res = await send_webhook(cfg, payload)
+            self.assertFalse(res.success)
+            self.assertIn("SSRF", res.error)
+
 
 class TestNotificationService(unittest.IsolatedAsyncioTestCase):
 

@@ -174,7 +174,8 @@ def create_app() -> FastAPI:
                 if auth_header.startswith("Bearer "):
                     api_key = auth_header[7:].strip()
 
-            if api_key != settings.api_secret_key:
+            import secrets
+            if not api_key or not secrets.compare_digest(api_key, settings.api_secret_key):
                 return JSONResponse(
                     status_code=401,
                     content={"detail": "Unauthorized: Invalid or missing API Key."},

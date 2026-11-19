@@ -1,9 +1,12 @@
 import os
+import re
 import shutil
 import time
 import zipfile
 from typing import Optional
 from utils.logging import get_logger
+
+UUID_REGEX = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 
 
 class WorkspaceManager:
@@ -23,9 +26,18 @@ class WorkspaceManager:
         self._logger = get_logger("WorkspaceManager")
         os.makedirs(self.base_dir, exist_ok=True)
 
+    def validate_build_id(self, build_id: str) -> None:
+        """Validates that build_id is a valid canonical UUID to prevent path traversal."""
+        if not build_id or not UUID_REGEX.match(str(build_id).strip()):
+            raise ValueError(f"Identificador de build no válido (debe ser UUIDv4): '{build_id}'")
+
     def get_workspace_dir(self, build_id: str) -> str:
         """Returns the absolute path of the workspace directory for the build."""
-        return os.path.join(self.base_dir, f"build_{build_id}")
+        self.validate_build_id(build_id)
+        target = os.path.abspath(os.path.join(self.base_dir, f"build_{build_id}"))
+        if not target.startswith(os.path.abspath(self.base_dir)):
+            raise ValueError(f"Acceso ilegal fuera del directorio base de workspaces: '{build_id}'")
+        return target
 
     def create_workspace(self, build_id: str) -> str:
         """Creates an empty isolated workspace directory for the build."""

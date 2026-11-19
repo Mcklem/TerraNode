@@ -52,17 +52,27 @@ async function forward(request: NextRequest, pathParts: string[]) {
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
   try {
+    const isProduction = process.env.NODE_ENV === 'production'
+    const incomingApiKey = request.headers.get('x-api-key')
+    const incomingAuth = request.headers.get('authorization')
+
+    // In production, require client-supplied authentication rather than blindly acting as confused deputy
+    if (isProduction && !incomingApiKey && !incomingAuth && apiKey) {
+      return NextResponse.json(
+        { detail: 'Acceso no autorizado: Se requiere cabecera de autenticación X-API-Key o Bearer en producción.' },
+        { status: 401 }
+      )
+    }
+
     const forwardHeaders: Record<string, string> = {
       Accept: '*/*',
     }
-    if (apiKey) {
-      forwardHeaders['X-API-Key'] = apiKey
-    }
-    const incomingApiKey = request.headers.get('x-api-key')
     if (incomingApiKey) {
       forwardHeaders['X-API-Key'] = incomingApiKey
+    } else if (apiKey) {
+      forwardHeaders['X-API-Key'] = apiKey
     }
-    const incomingAuth = request.headers.get('authorization')
+
     if (incomingAuth) {
       forwardHeaders['Authorization'] = incomingAuth
     }

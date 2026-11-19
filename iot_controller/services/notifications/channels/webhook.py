@@ -1,11 +1,56 @@
 import json
+import ipaddress
+import os
+import socket
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
+from urllib.parse import urlparse
 import httpx
 from services.notifications.models import NotificationPayload, NotificationResult
 from utils.logging import get_logger
 
 logger = get_logger("WebhookChannel")
+
+
+def is_safe_webhook_url(url: str, allow_private: bool = False) -> Tuple[bool, str]:
+    """Validates that webhook target URL does not target loopback, private RFC 1918, link-local, or cloud metadata."""
+    if allow_private or os.getenv("ALLOW_PRIVATE_WEBHOOKS", "false").lower() in ("true", "1"):
+        return True, ""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            return False, f"Esquema no permitido '{parsed.scheme}'. Solo se admite http o https."
+        hostname = parsed.hostname
+        if not hostname:
+            return False, "Nombre de host no válido."
+
+        lower_host = hostname.lower()
+        if lower_host in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+            return False, "Acceso a loopback / localhost bloqueado por política de seguridad SSRF."
+
+        # Check if hostname itself is an IP address
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+                return False, f"Destino IP privado/restringido ({hostname}) bloqueado por política de seguridad SSRF."
+            return True, ""
+        except ValueError:
+            pass
+
+        # If it's a domain name, resolve DNS
+        try:
+            resolved_ips = socket.getaddrinfo(hostname, None)
+            for item in resolved_ips:
+                ip_str = item[4][0]
+                ip = ipaddress.ip_address(ip_str)
+                if ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+                    return False, f"Destino IP resuelto ({ip_str}) bloqueado por política de seguridad SSRF."
+        except socket.gaierror:
+            pass
+
+        return True, ""
+    except Exception as e:
+        return False, f"Error validando URL de webhook: {e}"
 
 
 def _render_template(template_str: str, context: Dict[str, Any]) -> str:
@@ -39,6 +84,16 @@ async def send_webhook(
             channel="webhook",
             target=name,
             error=f"URL del Webhook '{name}' no configurada.",
+        )
+
+    is_safe, error_msg = is_safe_webhook_url(url)
+    if not is_safe:
+        logger.warning(f"Webhook '{name}' blocked by SSRF protection: {error_msg}")
+        return NotificationResult(
+            success=False,
+            channel="webhook",
+            target=name,
+            error=f"Bloqueado por seguridad SSRF: {error_msg}",
         )
 
     # Build context for template substitution

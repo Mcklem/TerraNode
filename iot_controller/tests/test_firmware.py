@@ -237,6 +237,14 @@ class TestFirmwareStudio(unittest.IsolatedAsyncioTestCase):
         self.assertIsNotNone(bin_path)
         self.assertTrue(os.path.isfile(bin_path))
 
+    def test_workspace_manager_path_traversal_rejection(self):
+        """Verify WorkspaceManager rejects path traversal attempts."""
+        from firmware.workspace import WorkspaceManager
+        wm = WorkspaceManager(os.path.join(self.temp_dir, "workspaces"))
+        for malicious_id in ["../etc/passwd", "..\\system32", "build_evil", "123-not-uuid"]:
+            with self.assertRaises(ValueError):
+                wm.get_workspace_dir(malicious_id)
+
 
 class TestFirmwareApiEndpoints(unittest.TestCase):
     """Test FastAPI REST endpoints for Firmware Studio."""
